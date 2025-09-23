@@ -7,7 +7,10 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ArrowLeft, FileText, AlertTriangle, CheckCircle, AlertCircle, Copy, Bot, Zap } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { ArrowLeft, FileText, AlertTriangle, CheckCircle, AlertCircle, Copy, Bot, Zap, Edit, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { normalizeFlag, highlightText, copyToClipboard } from '@/lib/safeFlag';
 
@@ -43,6 +46,22 @@ const Report = () => {
   const [loading, setLoading] = useState(true);
   const [isCopying, setIsCopying] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
+  const [useAI, setUseAI] = useState(true);
+  const [redlineModal, setRedlineModal] = useState<{
+    isOpen: boolean;
+    loading: boolean;
+    data: {
+      rewrite: string;
+      html: string;
+      plain_diff: string;
+      original: string;
+    } | null;
+  }>({
+    isOpen: false,
+    loading: false,
+    data: null,
+  });
+  const [redlineTab, setRedlineTab] = useState("redline");
 
   useEffect(() => {
     const fetchAnalysisData = async () => {
@@ -166,7 +185,7 @@ const Report = () => {
 
     return (
       <div className="rounded-xl border p-4 space-y-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-xs px-2 py-1 rounded-full ${
             f.severity === 'high' ? 'bg-red-100 text-red-700' :
             f.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
@@ -174,8 +193,17 @@ const Report = () => {
           }`}>
             {f.severity.toUpperCase()}
           </span>
-          <button className="text-xs underline" onClick={() => copyToClipboard(f.clause)}>Copy clause</button>
-          <button className="text-xs underline" onClick={() => copyToClipboard(f.suggestion)}>Copy suggestion</button>
+          <button className="text-xs underline hover:no-underline" onClick={() => copyToClipboard(f.clause)}>Copy clause</button>
+          <button className="text-xs underline hover:no-underline" onClick={() => copyToClipboard(f.suggestion)}>Copy suggestion</button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-xs h-6 px-2"
+            onClick={() => handleRedline(f.clause, f.suggestion)}
+          >
+            <Edit className="w-3 h-3 mr-1" />
+            Redline
+          </Button>
         </div>
 
         {/* clause with highlights; falls back to plain text if no keywords */}
@@ -273,6 +301,54 @@ const Report = () => {
     }
   };
 
+  const handleRedline = async (clause: string, suggestion: string) => {
+    setRedlineModal(prev => ({ ...prev, isOpen: true, loading: true, data: null }));
+    setRedlineTab("redline");
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Authentication required",
+          description: "Please sign in to use the redline feature.",
+          variant: "destructive",
+        });
+        setRedlineModal(prev => ({ ...prev, isOpen: false, loading: false }));
+        return;
+      }
+
+      const response = await supabase.functions.invoke('api-redline', {
+        body: {
+          clause,
+          suggestion,
+          useAI
+        }
+      });
+
+      if (response.error) {
+        throw response.error;
+      }
+
+      setRedlineModal(prev => ({
+        ...prev,
+        loading: false,
+        data: {
+          ...response.data,
+          original: clause
+        }
+      }));
+
+    } catch (error) {
+      console.error('Redline error:', error);
+      toast({
+        title: "Redline failed",
+        description: "Unable to generate redline. Please try again.",
+        variant: "destructive",
+      });
+      setRedlineModal(prev => ({ ...prev, isOpen: false, loading: false }));
+    }
+  };
+
   if (loading) {
     return (
       <div className="p-6 md:p-8 lg:p-12">
@@ -352,7 +428,19 @@ const Report = () => {
         <div className="space-y-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
             <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
-              <h2 className="text-xl font-semibold">Issues Found</h2>
+              <div className="flex items-center gap-4">
+                <h2 className="text-xl font-semibold">Issues Found</h2>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="use-ai"
+                    checked={useAI}
+                    onCheckedChange={setUseAI}
+                  />
+                  <Label htmlFor="use-ai" className="text-sm text-muted-foreground">
+                    Use AI for redlines
+                  </Label>
+                </div>
+              </div>
               <Button
                 variant="outline"
                 size="sm"
@@ -471,6 +559,90 @@ const Report = () => {
           </Button>
         </div>
       </div>
+
+      {/* Redline Modal */}
+      <Dialog open={redlineModal.isOpen} onOpenChange={(open) => setRedlineModal(prev => ({ ...prev, isOpen: open }))}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-hidden flex flex-col">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Edit className="w-5 h-5" />
+              Clause Redline
+            </DialogTitle>
+          </DialogHeader>
+
+          {redlineModal.loading ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin" />
+              <span className="ml-2">Generating redline...</span>
+            </div>
+          ) : redlineModal.data ? (
+            <Tabs value={redlineTab} onValueChange={setRedlineTab} className="flex-1 flex flex-col">
+              <TabsList className="grid w-full grid-cols-3 mb-4">
+                <TabsTrigger value="redline">Redline</TabsTrigger>
+                <TabsTrigger value="clean">Clean Rewrite</TabsTrigger>
+                <TabsTrigger value="original">Original</TabsTrigger>
+              </TabsList>
+
+              <div className="flex-1 overflow-hidden">
+                <TabsContent value="redline" className="h-full mt-0">
+                  <div className="border rounded-lg p-4 h-full overflow-auto">
+                    <style>
+                      {`
+                        .redline-content del {
+                          background-color: #fecaca;
+                          color: #dc2626;
+                          text-decoration: line-through;
+                          padding: 1px 2px;
+                          border-radius: 2px;
+                        }
+                        .redline-content ins {
+                          background-color: #bbf7d0;
+                          color: #16a34a;
+                          text-decoration: underline;
+                          padding: 1px 2px;
+                          border-radius: 2px;
+                        }
+                      `}
+                    </style>
+                    <div 
+                      className="text-sm leading-relaxed redline-content"
+                      dangerouslySetInnerHTML={{ __html: redlineModal.data.html }}
+                    />
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="clean" className="h-full mt-0">
+                  <div className="border rounded-lg p-4 h-full overflow-auto flex flex-col">
+                    <div className="flex-1">
+                      <pre className="text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                        {redlineModal.data.rewrite}
+                      </pre>
+                    </div>
+                    <div className="pt-4 border-t mt-4">
+                      <Button
+                        size="sm"
+                        onClick={() => copyToClipboard(redlineModal.data?.rewrite || '')}
+                        className="gap-2"
+                      >
+                        <Copy className="w-4 h-4" />
+                        Copy Rewrite
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+
+                <TabsContent value="original" className="h-full mt-0">
+                  <div className="border rounded-lg p-4 h-full overflow-auto">
+                    <pre className="text-sm leading-relaxed whitespace-pre-wrap font-sans">
+                      {redlineModal.data.original}
+                    </pre>
+                  </div>
+                </TabsContent>
+              </div>
+            </Tabs>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
