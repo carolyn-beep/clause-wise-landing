@@ -133,14 +133,28 @@ const Upload = () => {
       if (error) {
         console.error('Upload error:', error);
         const errorMessage = error.message || "Failed to extract text from file";
+        
+        // Handle specific error cases
+        if (errorMessage.includes('Text too long') || errorMessage.includes('413')) {
+          toast({
+            title: "Text too long — split it into smaller sections (≤ 60,000 chars).",
+            variant: "destructive",
+          });
+        } else if (errorMessage.includes('Too many requests') || errorMessage.includes('429')) {
+          toast({
+            title: "You're going fast — please wait a moment and try again.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Upload failed",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
+        
         setUploadError(errorMessage);
         setCanRetry(!error.user_friendly); // Allow retry for network errors, not validation errors
-        
-        toast({
-          title: "Upload failed",
-          description: errorMessage,
-          variant: "destructive",
-        });
         return;
       }
 
@@ -307,11 +321,25 @@ const Upload = () => {
 
       if (error) {
         console.error('Analysis error:', error);
-        toast({
-          title: "Analysis failed",
-          description: error.message || "Failed to analyze contract. Please try again.",
-          variant: "destructive",
-        });
+        
+        // Handle specific error cases
+        if (error.message?.includes('Text too long') || error.message?.includes('413')) {
+          toast({
+            title: "Text too long — split it into smaller sections (≤ 60,000 chars).",
+            variant: "destructive",
+          });
+        } else if (error.message?.includes('Too many requests') || error.message?.includes('429')) {
+          toast({
+            title: "You're going fast — please wait a moment and try again.",
+            variant: "destructive",
+          });
+        } else {
+          toast({
+            title: "Analysis failed",
+            description: error.message || "Failed to analyze contract. Please try again.",
+            variant: "destructive",
+          });
+        }
         return;
       }
 
