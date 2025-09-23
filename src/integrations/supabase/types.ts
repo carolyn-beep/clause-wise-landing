@@ -14,7 +14,106 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      analyses: {
+        Row: {
+          contract_id: string
+          created_at: string
+          id: string
+          overall_risk: string
+          summary: string | null
+          user_id: string
+        }
+        Insert: {
+          contract_id: string
+          created_at?: string
+          id?: string
+          overall_risk: string
+          summary?: string | null
+          user_id: string
+        }
+        Update: {
+          contract_id?: string
+          created_at?: string
+          id?: string
+          overall_risk?: string
+          summary?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "analyses_contract_id_fkey"
+            columns: ["contract_id"]
+            isOneToOne: false
+            referencedRelation: "contracts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contracts: {
+        Row: {
+          created_at: string
+          id: string
+          source_text: string
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          source_text: string
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          source_text?: string
+          title?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
+      flags: {
+        Row: {
+          analysis_id: string
+          clause: string | null
+          created_at: string
+          id: string
+          rationale: string | null
+          severity: string
+          suggestion: string | null
+          user_id: string
+        }
+        Insert: {
+          analysis_id: string
+          clause?: string | null
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          severity: string
+          suggestion?: string | null
+          user_id: string
+        }
+        Update: {
+          analysis_id?: string
+          clause?: string | null
+          created_at?: string
+          id?: string
+          rationale?: string | null
+          severity?: string
+          suggestion?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flags_analysis_id_fkey"
+            columns: ["analysis_id"]
+            isOneToOne: false
+            referencedRelation: "analyses"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
