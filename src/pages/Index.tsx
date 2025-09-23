@@ -33,31 +33,31 @@ const Index = () => {
           <div className="grid md:grid-cols-3 gap-8">
             <Card className="p-8 text-center shadow-soft hover:shadow-medium transition-smooth border-0">
               <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto mb-6">
-                <Zap className="w-8 h-8 text-white" />
-              </div>
-              <h3 className="text-xl font-semibold mb-4">Instant Analysis</h3>
-              <p className="text-muted-foreground">
-                Upload your contract and get AI-powered analysis in seconds. Identify potential issues before you sign.
-              </p>
-            </Card>
-
-            <Card className="p-8 text-center shadow-soft hover:shadow-medium transition-smooth border-0">
-              <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto mb-6">
                 <Shield className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold mb-4">Risk Detection</h3>
+              <h3 className="text-xl font-semibold mb-4">Spot red flags fast</h3>
               <p className="text-muted-foreground">
-                Automatically spot unfavorable clauses, payment risks, and legal red flags that could hurt your business.
+                Identify indemnity clauses, liability caps, noncompetes, and other risky terms that could hurt your business.
               </p>
             </Card>
 
             <Card className="p-8 text-center shadow-soft hover:shadow-medium transition-smooth border-0">
               <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto mb-6">
-                <Clock className="w-8 h-8 text-white" />
+                <CheckCircle className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold mb-4">Save Time & Money</h3>
+              <h3 className="text-xl font-semibold mb-4">Clear, practical suggestions</h3>
               <p className="text-muted-foreground">
-                Skip expensive lawyer consultations for routine reviews. Get professional-grade analysis at a fraction of the cost.
+                Get actionable language improvements you can paste back into your contract negotiations.
+              </p>
+            </Card>
+
+            <Card className="p-8 text-center shadow-soft hover:shadow-medium transition-smooth border-0">
+              <div className="w-16 h-16 bg-gradient-primary rounded-full flex items-center justify-center mx-auto mb-6">
+                <Zap className="w-8 h-8 text-white" />
+              </div>
+              <h3 className="text-xl font-semibold mb-4">Works with paste, PDF/DOCX, or TXT</h3>
+              <p className="text-muted-foreground">
+                No setup needed — just upload your contract and get instant analysis in any format.
               </p>
             </Card>
           </div>
