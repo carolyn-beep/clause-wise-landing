@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ArrowLeft, FileText, AlertTriangle, CheckCircle, AlertCircle, Copy, Bot, Zap } from "lucide-react";
 import { format } from "date-fns";
+import { normalizeFlag, highlightText, copyToClipboard } from '@/lib/safeFlag';
 
 interface Analysis {
   id: string;
@@ -157,6 +158,43 @@ const Report = () => {
     } else {
       return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">Rule-based only</Badge>;
     }
+  };
+
+  const FCard = ({ rawFlag }: { rawFlag: any }) => {
+    const f = normalizeFlag(rawFlag);
+    const html = highlightText(f.clause, f.keywords);
+
+    return (
+      <div className="rounded-xl border p-4 space-y-2">
+        <div className="flex items-center gap-2">
+          <span className={`text-xs px-2 py-1 rounded-full ${
+            f.severity === 'high' ? 'bg-red-100 text-red-700' :
+            f.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+            'bg-green-100 text-green-700'
+          }`}>
+            {f.severity.toUpperCase()}
+          </span>
+          <button className="text-xs underline" onClick={() => copyToClipboard(f.clause)}>Copy clause</button>
+          <button className="text-xs underline" onClick={() => copyToClipboard(f.suggestion)}>Copy suggestion</button>
+        </div>
+
+        {/* clause with highlights; falls back to plain text if no keywords */}
+        <pre className="whitespace-pre-wrap text-sm font-mono"
+             dangerouslySetInnerHTML={{ __html: html }} />
+
+        {/* collapsible context; render only if present */}
+        {f.context ? (
+          <details className="mt-1">
+            <summary className="cursor-pointer text-xs text-muted-foreground">View context</summary>
+            <div className="mt-1 text-xs text-muted-foreground whitespace-pre-wrap">{f.context}</div>
+          </details>
+        ) : null}
+
+        {/* rationale + suggestion */}
+        <div className="text-sm"><strong>Why:</strong> {f.rationale || '—'}</div>
+        <div className="text-sm"><strong>Suggestion:</strong> {f.suggestion || '—'}</div>
+      </div>
+    );
   };
 
   const getCurrentFlags = () => {
@@ -363,39 +401,7 @@ const Report = () => {
               {flags.length > 0 ? (
                 <div className="space-y-4">
                   {flags.map((flag) => (
-                    <Card key={flag.id} className="border-l-4 border-l-muted">
-                      <CardContent className="pt-6">
-                        <div className="space-y-4">
-                          {/* Header with severity */}
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                {getSeverityBadge(flag.severity)}
-                              </div>
-                              <div className="bg-muted p-3 rounded-md">
-                                <code className="text-sm font-mono text-foreground">
-                                  {flag.clause.length > 200 
-                                    ? `${flag.clause.substring(0, 200)}...` 
-                                    : flag.clause}
-                                </code>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Rationale and Suggestion */}
-                          <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                              <h4 className="font-medium mb-2 text-red-800">Why this matters:</h4>
-                              <p className="text-sm text-muted-foreground">{flag.rationale}</p>
-                            </div>
-                            <div>
-                              <h4 className="font-medium mb-2 text-green-800">Suggested approach:</h4>
-                              <p className="text-sm text-muted-foreground">{flag.suggestion}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <FCard key={flag.id} rawFlag={flag} />
                   ))}
                 </div>
               ) : (
@@ -415,37 +421,7 @@ const Report = () => {
               {analysis?.flags_ai && analysis.flags_ai.length > 0 ? (
                 <div className="space-y-4">
                   {analysis.flags_ai.map((flag, index) => (
-                    <Card key={`ai-${index}`} className="border-l-4 border-l-blue-200">
-                      <CardContent className="pt-6">
-                        <div className="space-y-4">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                {getSeverityBadge(flag.severity)}
-                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">AI</Badge>
-                              </div>
-                              <div className="bg-muted p-3 rounded-md">
-                                <code className="text-sm font-mono text-foreground">
-                                  {flag.clause.length > 200 
-                                    ? `${flag.clause.substring(0, 200)}...` 
-                                    : flag.clause}
-                                </code>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                              <h4 className="font-medium mb-2 text-red-800">Why this matters:</h4>
-                              <p className="text-sm text-muted-foreground">{flag.rationale}</p>
-                            </div>
-                            <div>
-                              <h4 className="font-medium mb-2 text-green-800">Suggested approach:</h4>
-                              <p className="text-sm text-muted-foreground">{flag.suggestion}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <FCard key={`ai-${index}`} rawFlag={flag} />
                   ))}
                 </div>
               ) : (
@@ -465,37 +441,7 @@ const Report = () => {
               {analysis?.flags_rule && analysis.flags_rule.length > 0 ? (
                 <div className="space-y-4">
                   {analysis.flags_rule.map((flag, index) => (
-                    <Card key={`rule-${index}`} className="border-l-4 border-l-orange-200">
-                      <CardContent className="pt-6">
-                        <div className="space-y-4">
-                          <div className="flex items-start justify-between gap-4">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                {getSeverityBadge(flag.severity)}
-                                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Rule</Badge>
-                              </div>
-                              <div className="bg-muted p-3 rounded-md">
-                                <code className="text-sm font-mono text-foreground">
-                                  {flag.clause.length > 200 
-                                    ? `${flag.clause.substring(0, 200)}...` 
-                                    : flag.clause}
-                                </code>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="grid md:grid-cols-2 gap-4">
-                            <div>
-                              <h4 className="font-medium mb-2 text-red-800">Why this matters:</h4>
-                              <p className="text-sm text-muted-foreground">{flag.rationale}</p>
-                            </div>
-                            <div>
-                              <h4 className="font-medium mb-2 text-green-800">Suggested approach:</h4>
-                              <p className="text-sm text-muted-foreground">{flag.suggestion}</p>
-                            </div>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <FCard key={`rule-${index}`} rawFlag={flag} />
                   ))}
                 </div>
               ) : (
