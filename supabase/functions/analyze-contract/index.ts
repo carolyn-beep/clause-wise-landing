@@ -28,6 +28,8 @@ interface AnalyzeResponse {
   overall_risk: 'low' | 'medium' | 'high';
   summary: string;
   flags: Flag[];
+  flags_ai: Flag[];
+  flags_rule: Flag[];
   aiRan: boolean;
   aiFallbackUsed: boolean;
 }
@@ -115,6 +117,9 @@ serve(async (req) => {
 
     // 5) Optionally run AI analysis
     let result;
+    let ruleFlags = ruleBased.flags; // Keep original rule-based flags
+    let aiFlags: Flag[] = []; // Keep AI flags separate
+    
     if (useAI === true) {
       try {
         // Content moderation check
@@ -122,6 +127,7 @@ serve(async (req) => {
         
         // Run AI analysis
         const ai = await runAIAnalysis(trimmedText);
+        aiFlags = ai.flags; // Store AI flags separately
 
         // Merge results
         // a) Flags de-dup (prefer AI severity on conflicts)
@@ -164,7 +170,7 @@ serve(async (req) => {
         // c) Summary prefer AI
         const summary = ai.summary || ruleBased.summary;
 
-        result = { overall_risk, summary, flags: mergedFlags, aiRan: true, aiFallbackUsed: false, ai };
+        result = { overall_risk, summary, flags: mergedFlags, aiRan: true, aiFallbackUsed: false, ai, ruleFlags, aiFlags };
       } catch (err) {
         // Moderation or AI error -> fall back to rule-based only
         if (err && (err as ModerationError).code === 'CONTENT_BLOCKED') {
@@ -178,10 +184,10 @@ serve(async (req) => {
           });
         }
         console.error('AI analysis failed', err);
-        result = { ...ruleBased, aiRan: false, aiFallbackUsed: true };
+        result = { ...ruleBased, aiRan: false, aiFallbackUsed: true, ruleFlags, aiFlags: [] };
       }
     } else {
-      result = { ...ruleBased, aiRan: false, aiFallbackUsed: false };
+      result = { ...ruleBased, aiRan: false, aiFallbackUsed: false, ruleFlags, aiFlags: [] };
     }
 
     // 6) Insert ANALYSIS row
@@ -242,6 +248,8 @@ serve(async (req) => {
       overall_risk,
       summary,
       flags,
+      flags_ai: result.aiRan ? (result.aiFlags || []) : [],
+      flags_rule: result.ruleFlags || [],
       aiRan: result.aiRan,
       aiFallbackUsed: result.aiFallbackUsed
     };
