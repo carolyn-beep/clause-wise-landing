@@ -104,9 +104,13 @@ const Upload = () => {
 
       setUploadProgress(30);
 
-      // Create FormData
+      // Create FormData with file, title, and analyzeNow
       const formData = new FormData();
       formData.append('file', file);
+      if (title.trim()) {
+        formData.append('title', title.trim());
+      }
+      formData.append('analyzeNow', analyzeImmediately.toString());
 
       setUploadProgress(60);
 
@@ -127,22 +131,36 @@ const Upload = () => {
 
       setUploadProgress(100);
 
-      // Update form with extracted text
-      setSourceText(data.extractedText);
-      if (!title && file.name) {
-        setTitle(file.name.replace(/\.[^/.]+$/, "")); // Remove file extension
+      // Handle response based on analyzeNow flag
+      if (analyzeImmediately && data.analysis_id && data.redirect_to) {
+        // Navigate immediately to analysis results
+        clearDraft();
+        navigate(data.redirect_to);
+        return;
       }
 
-      toast({
-        title: "Text extracted successfully",
-        description: `Extracted text from ${file.name}`,
-      });
+      // Fill textarea with extracted text
+      setSourceText(data.source_text || '');
+      
+      // Set title to returned title or fallback to filename without extension
+      const extractedTitle = data.title || file.name.replace(/\.[^/.]+$/, "");
+      if (!title.trim()) {
+        setTitle(extractedTitle);
+      }
 
-      // If analyze immediately is checked, trigger analysis
-      if (analyzeImmediately && data.extractedText.trim()) {
-        setTimeout(() => {
-          handleAnalyzeAfterExtraction(data.extractedText);
-        }, 1000); // Small delay to show success first
+      // Show any notes from extraction
+      const notes = data.notes || [];
+      if (notes.length > 0) {
+        toast({
+          title: "Text extracted with notes",
+          description: notes.join(', '),
+          variant: "default",
+        });
+      } else {
+        toast({
+          title: "Text extracted successfully",
+          description: `Extracted text from ${file.name}`,
+        });
       }
 
     } catch (error) {
@@ -158,54 +176,6 @@ const Upload = () => {
     }
   };
 
-  // Handle analysis after extraction
-  const handleAnalyzeAfterExtraction = async (extractedText: string) => {
-    setIsAnalyzing(true);
-
-    try {
-      const { data: { session }, error: authError } = await supabase.auth.getSession();
-      
-      if (authError || !session) {
-        toast({
-          title: "Authentication required",
-          description: "Please sign in to analyze contracts.",
-          variant: "destructive",
-        });
-        navigate("/sign-in");
-        return;
-      }
-
-      const { data, error } = await supabase.functions.invoke('analyze-contract', {
-        body: {
-          title: title.trim() || undefined,
-          source_text: extractedText.trim()
-        }
-      });
-
-      if (error) {
-        console.error('Analysis error:', error);
-        toast({
-          title: "Analysis failed",
-          description: error.message || "Failed to analyze contract. Please try again.",
-          variant: "destructive",
-        });
-        return;
-      }
-
-      clearDraft();
-      navigate(`/app/report/${data.analysis_id}`);
-
-    } catch (error) {
-      console.error('Unexpected error:', error);
-      toast({
-        title: "Something went wrong",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsAnalyzing(false);
-    }
-  };
 
   // Drag and drop handlers
   const handleDragEnter = useCallback((e: React.DragEvent) => {
