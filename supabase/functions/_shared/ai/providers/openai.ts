@@ -128,37 +128,16 @@ async function callOpenAIJSON({
   system: string;
   user: string;
 }) {
-  const endpoint = Deno.env.get('OPENAI_USE_CHAT') === '1'
-    ? 'https://api.openai.com/v1/chat/completions'
-    : 'https://api.openai.com/v1/responses';
+  const endpoint = 'https://api.openai.com/v1/chat/completions';
 
-  const isResponses = !endpoint.includes('chat/completions');
-
-  const body = isResponses
-    ? {
-        model,
-        input: [
-          { role: 'system', content: system },
-          { role: 'user', content: user }
-        ],
-        temperature: 0.25,
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: 'ClauseWiseAnalysis', schema: CLAUSEWISE_JSON_SCHEMA, strict: true }
-        }
-      }
-    : {
-        model,
-        messages: [
-          { role: 'system', content: system },
-          { role: 'user', content: user }
-        ],
-        temperature: 0.25,
-        response_format: {
-          type: 'json_schema',
-          json_schema: { name: 'ClauseWiseAnalysis', schema: CLAUSEWISE_JSON_SCHEMA, strict: true }
-        }
-      };
+  const body = {
+    model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user }
+    ],
+    temperature: 0.25
+  } as const;
 
   const t0 = Date.now();
   const res = await fetch(endpoint, {

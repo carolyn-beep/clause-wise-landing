@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       analyses: {
         Row: {
+          ai_fallback_used: boolean | null
           ai_latency_ms: number | null
           ai_model: string | null
           ai_provider: string | null
@@ -30,6 +31,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ai_fallback_used?: boolean | null
           ai_latency_ms?: number | null
           ai_model?: string | null
           ai_provider?: string | null
@@ -44,6 +46,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ai_fallback_used?: boolean | null
           ai_latency_ms?: number | null
           ai_model?: string | null
           ai_provider?: string | null
