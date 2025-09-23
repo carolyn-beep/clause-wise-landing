@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { newReqId, logEvent } from '../_shared/obs/logger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,17 +9,33 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
+  const req_id = newReqId();
+  const startTime = Date.now();
+  logEvent('upload_start', { req_id, route: '/api/upload-extract' });
+
   console.log(`${req.method} ${req.url}`);
 
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      headers: { 
+        ...corsHeaders,
+        'x-req-id': req_id 
+      } 
+    });
   }
 
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 405, 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'x-req-id': req_id 
+        } 
+      }
     );
   }
 
@@ -33,7 +50,14 @@ serve(async (req) => {
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'Authorization header required' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 401, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'x-req-id': req_id 
+          } 
+        }
       );
     }
 
@@ -45,11 +69,19 @@ serve(async (req) => {
       console.error('Auth error:', authError)
       return new Response(
         JSON.stringify({ error: 'Invalid authentication' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 401, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'x-req-id': req_id 
+          } 
+        }
       );
     }
 
     console.log(`Processing file upload for user: ${user.id}`);
+    logEvent('upload_authed', { req_id, user_id: user.id });
 
     // Parse multipart form data
     const formData = await req.formData();
@@ -75,7 +107,14 @@ serve(async (req) => {
           error: 'Only PDF, DOCX, or TXT files are supported',
           user_friendly: true 
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 400, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'x-req-id': req_id 
+          } 
+        }
       );
     }
 
@@ -87,7 +126,14 @@ serve(async (req) => {
           error: 'File too large (max 10MB)',
           user_friendly: true 
         }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 400, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'x-req-id': req_id 
+          } 
+        }
       );
     }
 
@@ -95,6 +141,7 @@ serve(async (req) => {
 
     let extractedText = '';
     let notes: string[] = [];
+    const extractStartTime = Date.now();
 
     // Extract text based on file type
     if (file.type === 'text/plain' || fileExtension === '.txt') {
@@ -132,7 +179,14 @@ serve(async (req) => {
             error: 'Failed to process PDF file',
             user_friendly: true 
           }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { 
+            status: 500, 
+            headers: { 
+              ...corsHeaders, 
+              'Content-Type': 'application/json',
+              'x-req-id': req_id 
+            } 
+          }
         );
       }
     } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileExtension === '.docx') {
@@ -146,7 +200,14 @@ serve(async (req) => {
             error: 'Failed to process DOCX file',
             user_friendly: true 
           }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { 
+            status: 500, 
+            headers: { 
+              ...corsHeaders, 
+              'Content-Type': 'application/json',
+              'x-req-id': req_id 
+            } 
+          }
         );
       }
     }
@@ -226,7 +287,11 @@ serve(async (req) => {
           }),
           { 
             status: 200, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            headers: { 
+              ...corsHeaders, 
+              'Content-Type': 'application/json',
+              'x-req-id': req_id 
+            } 
           }
         );
 
@@ -237,10 +302,23 @@ serve(async (req) => {
             error: 'Failed to analyze contract',
             message: 'Text was extracted successfully, but analysis failed. Please try the analyze step manually.'
           }),
-          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { 
+            status: 500, 
+            headers: { 
+              ...corsHeaders, 
+              'Content-Type': 'application/json',
+              'x-req-id': req_id 
+            } 
+          }
         );
       }
     }
+
+    logEvent('upload_end', {
+      req_id,
+      status: 200,
+      duration_ms: Date.now() - startTime
+    });
 
     return new Response(
       JSON.stringify({ 
@@ -253,7 +331,11 @@ serve(async (req) => {
       }),
       { 
         status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'x-req-id': req_id 
+        } 
       }
     );
 
@@ -261,7 +343,14 @@ serve(async (req) => {
     console.error('Error processing file upload:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error during file processing' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 500, 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'x-req-id': req_id 
+        } 
+      }
     );
   }
 });
