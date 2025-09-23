@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { User, LogOut, Trash2, Mail, Loader2 } from "lucide-react";
+import { DebugAISecrets } from "@/components/DebugAISecrets";
 
 const Account = () => {
   const [userEmail, setUserEmail] = useState<string>("");
@@ -241,6 +242,9 @@ const Account = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Debug AI Secrets - Dev Only */}
+          <DebugAISecrets />
         </div>
       </div>
     </div>

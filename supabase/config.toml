@@ -1,1 +1,4 @@
 project_id = "fecwtquqfbgpawkmxzvz"
+
+[functions.api-debug-ai-secrets]
+verify_jwt = false
