@@ -16,7 +16,7 @@ const Index = () => {
             Contract review, without the lawyer tax
           </h1>
           <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
-            ClauseWise flags risky clauses and suggests safer language — perfect for freelancers and small teams.
+            Paste your contract text or drop a file. We'll highlight risky clauses and propose safer wording.
           </p>
           
           <Link to="/app">
