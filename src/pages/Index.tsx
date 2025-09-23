@@ -70,9 +70,14 @@ const Index = () => {
           <div className="text-2xl font-bold bg-gradient-hero bg-clip-text text-transparent mb-4">
             ClauseWise
           </div>
-          <p className="text-muted-foreground">
+          <p className="text-muted-foreground mb-4">
             AI-powered contract review for freelancers and independent contractors.
           </p>
+          <div className="bg-muted/50 rounded-lg p-4 max-w-2xl mx-auto">
+            <p className="text-sm text-muted-foreground">
+              <strong>Heads-up:</strong> ClauseWise is an AI assistant, not a law firm. This report isn't legal advice.
+            </p>
+          </div>
         </div>
       </footer>
     </div>
