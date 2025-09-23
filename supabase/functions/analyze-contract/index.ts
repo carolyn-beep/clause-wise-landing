@@ -164,7 +164,7 @@ serve(async (req) => {
         // c) Summary prefer AI
         const summary = ai.summary || ruleBased.summary;
 
-        result = { overall_risk, summary, flags: mergedFlags, aiRan: true, aiFallbackUsed: false };
+        result = { overall_risk, summary, flags: mergedFlags, aiRan: true, aiFallbackUsed: false, ai };
       } catch (err) {
         // Moderation or AI error -> fall back to rule-based only
         if (err && (err as ModerationError).code === 'CONTENT_BLOCKED') {
@@ -185,30 +185,24 @@ serve(async (req) => {
     }
 
     // 6) Insert ANALYSIS row
-    const { overall_risk, summary, flags, meta } = result;
-    const analysisInsertData: any = {
-      user_id: user.id,
-      contract_id: contract.id,
-      overall_risk,
-      summary
-    };
+    const { overall_risk, summary, flags } = result;
 
-    // Add AI telemetry if available
-    if (meta && result.aiRan) {
-      analysisInsertData.ai_provider = meta.provider;
-      analysisInsertData.ai_model = meta.model;
-      analysisInsertData.ai_tokens_in = meta.tokens_in;
-      analysisInsertData.ai_tokens_out = meta.tokens_out;
-      analysisInsertData.ai_latency_ms = meta.latency_ms;
-      // Only store raw response in non-production or if explicitly needed
-      if (Deno.env.get('ENVIRONMENT') !== 'production') {
-        analysisInsertData.ai_raw = meta.raw;
-      }
-    }
+    const aiMeta = result.aiRan && result.ai && result.ai.meta ? result.ai.meta : null;
 
     const { data: analysis, error: aErr } = await supabase
       .from('analyses')
-      .insert(analysisInsertData)
+      .insert({
+        user_id: user.id,
+        contract_id: contract.id,
+        overall_risk,
+        summary,
+        ai_provider:   aiMeta ? aiMeta.provider : null,
+        ai_model:      aiMeta ? (aiMeta.model ?? null) : null,
+        ai_tokens_in:  aiMeta ? (aiMeta.tokens_in ?? null) : null,
+        ai_tokens_out: aiMeta ? (aiMeta.tokens_out ?? null) : null,
+        ai_latency_ms: aiMeta ? (aiMeta.latency_ms ?? null) : null,
+        ai_raw:        aiMeta ? (aiMeta.raw ?? null) : null
+      })
       .select()
       .single();
 
