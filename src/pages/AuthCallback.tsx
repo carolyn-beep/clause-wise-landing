@@ -19,23 +19,23 @@ const AuthCallback = () => {
         const hasAccessToken = hashParams.has('access_token') || currentUrl.searchParams.has('access_token');
         const code = currentUrl.searchParams.get('code');
 
-        let data: any, error: any;
+        let data: any = null;
+        let error: any = null;
+
         if (hasAccessToken) {
-          // Magic link / implicit flow -> tokens in URL hash
-          const access_token = hashParams.get('access_token');
-          const refresh_token = hashParams.get('refresh_token');
-          ({ data, error } = await supabase.auth.setSession({
-            access_token: access_token ?? '',
-            refresh_token: refresh_token ?? '',
-          }));
+          // Magic link flow where tokens are in URL hash
+          const access_token = hashParams.get('access_token') ?? currentUrl.searchParams.get('access_token') ?? '';
+          const refresh_token = hashParams.get('refresh_token') ?? currentUrl.searchParams.get('refresh_token') ?? '';
+          ({ data, error } = await supabase.auth.setSession({ access_token, refresh_token }));
+          // Clean the URL fragment to avoid reprocessing on refresh
+          history.replaceState(null, '', currentUrl.pathname + currentUrl.search);
         } else if (code) {
-          // OAuth or PKCE-based flows provide a code in the query string
-          ({ data, error } = await supabase.auth.exchangeCodeForSession(code));
+          // PKCE/code flow
+          ({ data, error } = await supabase.auth.exchangeCodeForSession(window.location.href));
         } else {
-          // Nothing to exchange; show error
-          error = { message: 'No auth credentials in URL' } as any;
+          error = { message: 'No auth credentials found in URL' } as any;
         }
-        
+
         if (error) {
           console.error('Auth callback error:', error);
           setStatus('error');
@@ -49,18 +49,11 @@ const AuthCallback = () => {
 
         if (data?.session) {
           setStatus('success');
-          toast({
-            title: "Successfully signed in!",
-            description: "Redirecting to your dashboard...",
-          });
-          setTimeout(() => navigate('/app'), 800);
+          toast({ title: "Successfully signed in!", description: "Redirecting to your dashboard..." });
+          setTimeout(() => navigate('/app'), 500);
         } else {
           setStatus('error');
-          toast({
-            title: "Authentication failed",
-            description: "No session found",
-            variant: "destructive",
-          });
+          toast({ title: "Authentication failed", description: "No session found", variant: "destructive" });
         }
       } catch (err) {
         console.error('Unexpected error:', err);
