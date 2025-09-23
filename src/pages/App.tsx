@@ -4,6 +4,7 @@ import { AppSidebar } from "@/components/AppSidebar";
 import Upload from "./app/Upload";
 import History from "./app/History";
 import Account from "./app/Account";
+import Report from "./app/Report";
 
 const App = () => {
   return (
@@ -16,6 +17,7 @@ const App = () => {
             <Route path="/upload" element={<Upload />} />
             <Route path="/history" element={<History />} />
             <Route path="/account" element={<Account />} />
+            <Route path="/report/:analysisId" element={<Report />} />
           </Routes>
         </main>
       </div>
