@@ -20,6 +20,7 @@ interface ContractWithAnalysis {
     overall_risk: 'low' | 'medium' | 'high';
     created_at: string;
     ai_provider: string | null;
+    ai_fallback_used?: boolean; // Optional for backward compatibility
   };
 }
 
@@ -46,7 +47,8 @@ const History = () => {
               id,
               overall_risk,
               created_at,
-              ai_provider
+              ai_provider,
+              ai_fallback_used
             )
           `)
           .order('created_at', { ascending: false });
@@ -89,7 +91,8 @@ const History = () => {
                 id: analysis.id,
                 overall_risk: analysis.overall_risk,
                 created_at: analysis.created_at,
-                ai_provider: analysis.ai_provider
+                ai_provider: analysis.ai_provider,
+                ai_fallback_used: analysis.ai_fallback_used || false
               };
             }
           });
@@ -188,12 +191,19 @@ const History = () => {
     }
   };
 
-  const getAnalysisTypeBadge = (aiProvider: string | null) => {
-    if (aiProvider) {
+  const getAnalysisTypeBadge = (analysis: { ai_provider: string | null; ai_fallback_used?: boolean }) => {
+    if (analysis.ai_provider && !analysis.ai_fallback_used) {
       return (
         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
           <Bot className="w-3 h-3 mr-1" />
           AI
+        </Badge>
+      );
+    } else if (analysis.ai_fallback_used) {
+      return (
+        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">
+          <Bot className="w-3 h-3 mr-1" />
+          AI (fallback)
         </Badge>
       );
     } else {
@@ -388,7 +398,7 @@ const History = () => {
                        {/* Analysis Type */}
                        <div className="col-span-6 md:col-span-1">
                          {contract.latest_analysis ? (
-                           getAnalysisTypeBadge(contract.latest_analysis.ai_provider)
+                           getAnalysisTypeBadge(contract.latest_analysis)
                          ) : null}
                        </div>
                       

@@ -17,6 +17,7 @@ interface Analysis {
   created_at: string;
   ai_provider: string | null;
   ai_model: string | null;
+  ai_fallback_used?: boolean; // Optional for backward compatibility
   flags_ai?: Flag[];
   flags_rule?: Flag[];
   contract: {
@@ -149,8 +150,10 @@ const Report = () => {
 
   const getAnalysisTypeBadge = () => {
     const aiRan = analysis?.ai_provider !== null;
-    if (aiRan) {
+    if (aiRan && !analysis?.ai_fallback_used) {
       return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">AI-assisted</Badge>;
+    } else if (analysis?.ai_fallback_used) {
+      return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Rule-based (AI unavailable)</Badge>;
     } else {
       return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">Rule-based only</Badge>;
     }

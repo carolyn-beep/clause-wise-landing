@@ -207,7 +207,8 @@ serve(async (req) => {
         ai_tokens_in:  aiMeta ? (aiMeta.tokens_in ?? null) : null,
         ai_tokens_out: aiMeta ? (aiMeta.tokens_out ?? null) : null,
         ai_latency_ms: aiMeta ? (aiMeta.latency_ms ?? null) : null,
-        ai_raw:        aiMeta ? (aiMeta.raw ?? null) : null
+        ai_raw:        aiMeta ? (aiMeta.raw ?? null) : null,
+        ai_fallback_used: result.aiFallbackUsed || false
       })
       .select()
       .single();
