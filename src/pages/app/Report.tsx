@@ -362,6 +362,67 @@ const Report = () => {
     }
   };
 
+  const handleExportDocx = async () => {
+    if (!analysisId) return;
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        toast({
+          title: "Authentication required",
+          description: "Please sign in to export data.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Call edge function with query parameter
+      const url = new URL(`https://fecwtquqfbgpawkmxzvz.supabase.co/functions/v1/api-export-docx`);
+      url.searchParams.set('analysisId', analysisId);
+
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZlY3d0cXVxZmJncGF3a214enZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2NDUyNjUsImV4cCI6MjA3NDIyMTI2NX0.xixQal5K_87D-fpOnLz1Fqx3kZUGeL3mbSZ2LH8gT-k'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      // Create blob and download
+      const blob = await response.blob();
+      const url2 = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url2;
+      
+      // Extract filename from response headers or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      const filename = contentDisposition?.match(/filename="([^"]+)"/)?.[1] || `clausewise-report-${analysisId}.docx`;
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url2);
+
+      toast({
+        title: "Export successful",
+        description: "DOCX report has been downloaded.",
+      });
+
+    } catch (error) {
+      console.error('Export error:', error);
+      toast({
+        title: "Export failed",
+        description: "Unable to export DOCX. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleRedline = async (clause: string, suggestion: string) => {
     setRedlineModal(prev => ({ ...prev, isOpen: true, loading: true, data: null }));
     setRedlineTab("redline");
@@ -621,6 +682,10 @@ const Report = () => {
           <Button variant="outline" onClick={handleExportCsv}>
             <Download className="w-4 h-4 mr-2" />
             Export CSV
+          </Button>
+          <Button variant="outline" onClick={handleExportDocx}>
+            <FileText className="w-4 h-4 mr-2" />
+            Export DOCX
           </Button>
         </div>
       </div>
