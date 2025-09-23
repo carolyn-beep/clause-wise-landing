@@ -14,6 +14,8 @@ interface Analysis {
   overall_risk: 'low' | 'medium' | 'high';
   summary: string;
   created_at: string;
+  ai_provider: string | null;
+  ai_model: string | null;
   contract: {
     title: string;
   };
@@ -141,6 +143,15 @@ const Report = () => {
     }
   };
 
+  const getAnalysisTypeBadge = () => {
+    const aiRan = analysis?.ai_provider !== null;
+    if (aiRan) {
+      return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">AI-assisted</Badge>;
+    } else {
+      return <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">Rule-based only</Badge>;
+    }
+  };
+
   const handleCopySuggestions = async () => {
     if (flags.length === 0) {
       toast({
@@ -247,6 +258,7 @@ const Report = () => {
                 {analysis.contract?.title || 'Contract Analysis'}
               </h1>
               {getRiskBadge(analysis.overall_risk)}
+              {getAnalysisTypeBadge()}
             </div>
             <p className="text-muted-foreground">
               Analyzed on {format(new Date(analysis.created_at), 'PPP')}
@@ -264,6 +276,7 @@ const Report = () => {
           </CardHeader>
           <CardContent>
             <p className="text-foreground leading-relaxed">{analysis.summary}</p>
+            <p className="text-muted-foreground text-sm mt-4 italic">This is not legal advice.</p>
           </CardContent>
         </Card>
 
