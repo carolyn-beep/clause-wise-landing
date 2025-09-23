@@ -196,7 +196,7 @@ serve(async (req) => {
     // 6) Insert ANALYSIS row
     const { overall_risk, summary, flags } = result;
 
-    const aiMeta = aiRan && aiResult && aiResult.meta ? aiResult.meta : null;
+    const aiMeta = aiRan && aiResult?.meta ? aiResult.meta : null;
 
     const { data: analysis, error: aErr } = await supabase
       .from('analyses')
@@ -211,7 +211,10 @@ serve(async (req) => {
         ai_tokens_out: aiMeta ? (aiMeta.tokens_out ?? null) : null,
         ai_latency_ms: aiMeta ? (aiMeta.latency_ms ?? null) : null,
         ai_raw:        aiMeta ? (aiMeta.raw ?? null) : null,
-        ai_fallback_used: aiFallbackUsed
+        ai_fallback_used: aiFallbackUsed               // <— new
+      })
+      .select()
+      .single();
       })
       .select()
       .single();
