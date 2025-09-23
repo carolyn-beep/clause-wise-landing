@@ -95,30 +95,42 @@ export type Database = {
         Row: {
           analysis_id: string
           clause: string | null
+          context: string | null
           created_at: string
           id: string
+          keywords: string[] | null
           rationale: string | null
           severity: string
+          span_end: number | null
+          span_start: number | null
           suggestion: string | null
           user_id: string
         }
         Insert: {
           analysis_id: string
           clause?: string | null
+          context?: string | null
           created_at?: string
           id?: string
+          keywords?: string[] | null
           rationale?: string | null
           severity: string
+          span_end?: number | null
+          span_start?: number | null
           suggestion?: string | null
           user_id: string
         }
         Update: {
           analysis_id?: string
           clause?: string | null
+          context?: string | null
           created_at?: string
           id?: string
+          keywords?: string[] | null
           rationale?: string | null
           severity?: string
+          span_end?: number | null
+          span_start?: number | null
           suggestion?: string | null
           user_id?: string
         }
