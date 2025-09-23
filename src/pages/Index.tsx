@@ -12,18 +12,29 @@ const Index = () => {
       {/* Hero Section */}
       <section className="px-4 py-16 md:py-24 lg:py-32 text-center">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-hero bg-clip-text text-transparent leading-tight">
-            Contract review, without the lawyer tax
+          <h1 className="text-3xl md:text-5xl font-bold mb-6 text-foreground leading-tight">
+            Spot contract risks before you sign
           </h1>
-          <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
-            Paste your contract text or drop a file. We'll highlight risky clauses and propose safer wording.
+          <p className="text-lg md:text-xl text-muted-foreground mb-12 max-w-[60ch] mx-auto font-normal leading-relaxed">
+            AI flags issues and suggests safer wording—fast.
           </p>
           
-          <Link to="/app">
-            <Button variant="hero" size="lg" className="text-lg px-12 py-4 mb-16">
-              Get started free
-            </Button>
-          </Link>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-6">
+            <Link to="/app">
+              <Button size="lg" className="text-lg px-8 py-4 w-full sm:w-auto">
+                Analyze a contract
+              </Button>
+            </Link>
+            <Link to="/app?demo=1">
+              <Button variant="ghost" size="lg" className="text-lg px-8 py-4 w-full sm:w-auto">
+                View sample report
+              </Button>
+            </Link>
+          </div>
+          
+          <p className="text-sm text-muted-foreground">
+            No credit card. No signup for demo.
+          </p>
         </div>
       </section>
 
