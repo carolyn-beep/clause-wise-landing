@@ -1,21 +1,14 @@
 import { getAIConfig } from '../../env-utils.ts';
 
-/**
- * Contract analysis flag structure
- */
-export interface AIFlag {
-  clause: string;
-  severity: 'low' | 'medium' | 'high';
-  rationale: string;
-  suggestion: string;
-}
+type Severity = 'low' | 'medium' | 'high';
+type AIFlag = { clause: string; severity: Severity; rationale: string; suggestion: string };
 
 /**
  * Contract analysis result structure with telemetry
  */
 export interface ContractAnalysisResult {
   summary: string;
-  overall_risk: 'low' | 'medium' | 'high';
+  overall_risk: Severity;
   flags: AIFlag[];
   meta?: {
     provider: 'openai';
@@ -23,246 +16,253 @@ export interface ContractAnalysisResult {
     tokens_in?: number | null;
     tokens_out?: number | null;
     latency_ms?: number | null;
-    raw?: any; // keep undefined in production if you prefer
+    raw?: any;
   };
 }
 
-/**
- * JSON Schema for OpenAI structured output
- */
-const ANALYSIS_SCHEMA = {
-  "type": "object",
-  "properties": {
-    "overall_risk": {
-      "enum": ["low", "medium", "high"]
-    },
-    "summary": {
-      "type": "string",
-      "minLength": 1,
-      "maxLength": 600
-    },
-    "flags": {
-      "type": "array",
-      "maxItems": 40,
-      "items": {
-        "type": "object",
-        "properties": {
-          "clause": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 600
-          },
-          "severity": {
-            "enum": ["low", "medium", "high"]
-          },
-          "rationale": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 400
-          },
-          "suggestion": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 400
-          }
+// Re-export for compatibility
+export type AIResult = ContractAnalysisResult;
+export { type AIFlag };
+
+const REQUIRED_PROVIDER = 'openai';
+
+const CLAUSEWISE_JSON_SCHEMA = {
+  type: 'object',
+  properties: {
+    overall_risk: { enum: ['low', 'medium', 'high'] },
+    summary: { type: 'string', minLength: 1, maxLength: 600 },
+    flags: {
+      type: 'array',
+      maxItems: 40,
+      items: {
+        type: 'object',
+        properties: {
+          clause: { type: 'string', minLength: 1, maxLength: 600 },
+          severity: { enum: ['low', 'medium', 'high'] },
+          rationale: { type: 'string', minLength: 1, maxLength: 400 },
+          suggestion: { type: 'string', minLength: 1, maxLength: 400 }
         },
-        "required": ["clause", "severity", "rationale", "suggestion"],
-        "additionalProperties": false
+        required: ['clause', 'severity', 'rationale', 'suggestion'],
+        additionalProperties: false
       }
     }
   },
-  "required": ["overall_risk", "summary", "flags"],
-  "additionalProperties": false
-};
+  required: ['overall_risk', 'summary', 'flags'],
+  additionalProperties: false
+} as const;
 
-/**
- * System prompt for contract analysis
- */
-const SYSTEM_PROMPT = `You are an expert contract analyst for freelancers. Output STRICT JSON matching the schema. Be concise and practical.
+const SYSTEM_PROMPT = `
+You are an expert contract analyst focused on protecting freelancers.
+Return STRICT JSON only, matching the provided JSON schema exactly.
+Style: concise, practical, no fluff. No disclaimers of any kind in JSON.
+If the text appears boilerplate/incomplete, say so briefly in "summary".
+` as const;
 
-Focus on identifying clauses that could be problematic for freelancers, such as:
-- Unfair payment terms or conditions
-- IP ownership issues
-- Excessive liability or indemnification
-- Non-compete restrictions
-- Termination clauses
-- Auto-renewal terms
-- Limitation of liability favoring only one party
-- Vague scope of work definitions
-- Unreasonable warranty disclaimers
+function buildUserPrompt(text: string, truncated: boolean) {
+  return [
+    `Analyze the following contract text for freelancer-relevant risks.`,
+    `Identify clauses and produce flags with severity, brief rationale, and a practical suggestion.`,
+    `Do not include any text outside JSON.`,
+    truncated
+      ? `NOTE: The input was truncated for length. If needed, reflect this at the end of "summary".`
+      : ``,
+    `--- CONTRACT TEXT START ---\n${text}\n--- CONTRACT TEXT END ---`
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
 
-For each flag:
-- Extract the specific problematic clause text
-- Assess severity: low (minor concern), medium (should negotiate), high (major red flag)
-- Explain why it's problematic in plain language
-- Suggest specific improvements or alternatives
+// Try to extract JSON string from multiple possible OpenAI response shapes
+function extractJsonString(raw: any): string | null {
+  // Responses API (typical)
+  const r1 = raw?.output?.[0]?.content?.[0]?.text;
+  if (r1 && typeof r1 === 'string') return r1;
 
-Keep your summary under 600 characters and focus on the overall contract fairness and risk level.`;
+  // Some Responses API SDKs expose output_text
+  const r2 = raw?.output_text;
+  if (r2 && typeof r2 === 'string') return r2;
 
-/**
- * Analyze contract text using OpenAI
- */
-export async function analyzeWithOpenAI({ text }: { text: string }): Promise<ContractAnalysisResult> {
-  const config = getAIConfig();
-  
-  // Validate provider
-  if (config.provider !== 'openai') {
-    throw {
-      code: 'AI_ERROR',
-      message: `Expected AI_PROVIDER to be 'openai', got '${config.provider}'`
-    };
+  // Chat Completions
+  const r3 = raw?.choices?.[0]?.message?.content;
+  if (r3 && typeof r3 === 'string') return r3;
+
+  // Fallback: find first {...} block
+  const texty =
+    raw?.message ??
+    raw?.content ??
+    raw?.choices?.[0]?.text ??
+    (typeof raw === 'string' ? raw : '');
+  if (typeof texty === 'string') {
+    const m = texty.match(/\{[\s\S]*\}$/m);
+    if (m) return m[0];
   }
+  return null;
+}
 
-  // Truncate text if too long
-  let processedText = text.trim();
-  if (processedText.length > 60000) {
-    processedText = processedText.substring(0, 60000) + '\n\n[Note: Contract text was truncated for length]';
-    console.log(`Contract text truncated from ${text.length} to ${processedText.length} characters`);
-  }
+// Minimal structural check (avoid extra deps)
+function looksLikeSchema(o: any): o is Omit<ContractAnalysisResult, 'meta'> {
+  return (
+    o &&
+    (o.overall_risk === 'low' || o.overall_risk === 'medium' || o.overall_risk === 'high') &&
+    typeof o.summary === 'string' &&
+    Array.isArray(o.flags) &&
+    o.flags.every(
+      (f: any) =>
+        f &&
+        typeof f.clause === 'string' &&
+        (f.severity === 'low' || f.severity === 'medium' || f.severity === 'high') &&
+        typeof f.rationale === 'string' &&
+        typeof f.suggestion === 'string'
+    )
+  );
+}
 
-  console.log(`Analyzing contract with OpenAI model: ${config.model}`);
-  console.log(`Text length: ${processedText.length} characters`);
+async function callOpenAIJSON({
+  apiKey,
+  model,
+  system,
+  user
+}: {
+  apiKey: string;
+  model: string;
+  system: string;
+  user: string;
+}) {
+  const endpoint = Deno.env.get('OPENAI_USE_CHAT') === '1'
+    ? 'https://api.openai.com/v1/chat/completions'
+    : 'https://api.openai.com/v1/responses';
 
-  const t0 = Date.now(); // Start timing
+  const isResponses = !endpoint.includes('chat/completions');
 
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${config.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: config.model,
-        messages: [
-          {
-            role: 'system',
-            content: SYSTEM_PROMPT
-          },
-          {
-            role: 'user',
-            content: `Please analyze this contract text and identify potential issues for a freelancer:\n\n${processedText}`
-          }
-        ],
-        // Use appropriate parameters based on model
-        ...(config.model.startsWith('gpt-5') || config.model.startsWith('o3') || config.model.startsWith('o4') || config.model.startsWith('gpt-4.1') 
-          ? { max_completion_tokens: 4000 } 
-          : { max_tokens: 4000, temperature: 0.3 }
-        ),
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "contract_analysis",
-            strict: true,
-            schema: ANALYSIS_SCHEMA
-          }
-        }
-      }),
-    });
-
-    const latency_ms = Date.now() - t0; // Calculate latency
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`OpenAI API error: ${response.status} - ${errorText}`);
-      throw {
-        code: 'AI_ERROR',
-        message: `OpenAI API error: ${response.status} - ${response.statusText}`
-      };
-    }
-
-    const raw = await response.json(); // Keep full raw response
-    
-    if (!raw.choices || !raw.choices[0] || !raw.choices[0].message) {
-      console.error('Invalid OpenAI response structure:', raw);
-      throw {
-        code: 'AI_ERROR',
-        message: 'Invalid response from OpenAI API'
-      };
-    }
-
-    const content = raw.choices[0].message.content;
-    console.log('OpenAI response content length:', content?.length || 0);
-
-    // Parse the JSON response
-    let parsed;
-    try {
-      parsed = JSON.parse(content);
-    } catch (parseError) {
-      console.error('JSON parsing error:', parseError);
-      console.error('Raw content:', content);
-      throw {
-        code: 'AI_ERROR',
-        message: 'Failed to parse AI response as valid JSON'
-      };
-    }
-
-    // Validate the response structure
-    if (!parsed.overall_risk || !parsed.summary || !Array.isArray(parsed.flags)) {
-      console.error('Invalid analysis result structure:', parsed);
-      throw {
-        code: 'AI_ERROR',
-        message: 'AI response missing required fields'
-      };
-    }
-
-    // Validate enum values
-    const validRiskLevels = ['low', 'medium', 'high'];
-    if (!validRiskLevels.includes(parsed.overall_risk)) {
-      throw {
-        code: 'AI_ERROR',
-        message: `Invalid overall_risk value: ${parsed.overall_risk}`
-      };
-    }
-
-    // Validate flags
-    for (const flag of parsed.flags) {
-      if (!flag.clause || !flag.severity || !flag.rationale || !flag.suggestion) {
-        throw {
-          code: 'AI_ERROR',
-          message: 'Flag missing required fields'
-        };
-      }
-      if (!validRiskLevels.includes(flag.severity)) {
-        throw {
-          code: 'AI_ERROR',
-          message: `Invalid flag severity: ${flag.severity}`
-        };
-      }
-    }
-
-    // Extract telemetry metadata
-    const model = raw?.model ?? config.model ?? null;
-    const tokens_in = raw?.usage?.prompt_tokens ?? raw?.usage?.input_tokens ?? null;
-    const tokens_out = raw?.usage?.completion_tokens ?? raw?.usage?.output_tokens ?? null;
-
-    console.log(`Analysis complete: ${parsed.flags.length} flags, overall risk: ${parsed.overall_risk}`);
-    console.log(`Telemetry: model=${model}, tokens_in=${tokens_in}, tokens_out=${tokens_out}, latency=${latency_ms}ms`);
-
-    // Return result with telemetry metadata
-    return {
-      ...parsed,
-      meta: {
-        provider: 'openai',
+  const body = isResponses
+    ? {
         model,
-        tokens_in,
-        tokens_out,
-        latency_ms,
-        raw // Consider omitting in production for privacy/size
+        input: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ],
+        temperature: 0.25,
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'ClauseWiseAnalysis', schema: CLAUSEWISE_JSON_SCHEMA, strict: true }
+        }
       }
-    } as ContractAnalysisResult;
+    : {
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ],
+        temperature: 0.25,
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'ClauseWiseAnalysis', schema: CLAUSEWISE_JSON_SCHEMA, strict: true }
+        }
+      };
 
-  } catch (error) {
-    // Re-throw our custom errors
-    if (error.code === 'AI_ERROR') {
-      throw error;
-    }
+  const t0 = Date.now();
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
 
-    // Handle network and other errors
-    console.error('Unexpected error during OpenAI analysis:', error);
-    throw {
-      code: 'AI_ERROR',
-      message: `Analysis failed: ${error.message || 'Unknown error'}`
-    };
+  const raw = await res.json().catch(() => ({}));
+  const latency_ms = Date.now() - t0;
+  if (!res.ok) {
+    const msg = raw?.error?.message || `OpenAI HTTP ${res.status}`;
+    const err: any = new Error(msg);
+    err.code = 'AI_ERROR';
+    err.raw = raw;
+    throw err;
   }
+
+  const jsonText = extractJsonString(raw);
+  if (!jsonText) {
+    const err: any = new Error('No JSON found in model output');
+    err.code = 'AI_BAD_OUTPUT';
+    err.raw = raw;
+    throw err;
+  }
+
+  let parsed: any;
+  try {
+    parsed = JSON.parse(jsonText);
+  } catch (e) {
+    const err: any = new Error('Invalid JSON in model output');
+    err.code = 'AI_BAD_JSON';
+    err.raw = raw;
+    throw err;
+  }
+
+  const meta = {
+    provider: 'openai' as const,
+    model: raw?.model ?? Deno.env.get('OPENAI_MODEL') ?? null,
+    tokens_in: raw?.usage?.input_tokens ?? raw?.usage?.prompt_tokens ?? null,
+    tokens_out: raw?.usage?.output_tokens ?? raw?.usage?.completion_tokens ?? null,
+    latency_ms,
+    raw
+  };
+
+  return { parsed, meta };
+}
+
+export async function analyzeWithOpenAI({ text }: { text: string }): Promise<ContractAnalysisResult> {
+  if ((Deno.env.get('AI_PROVIDER') || REQUIRED_PROVIDER).toLowerCase() !== REQUIRED_PROVIDER) {
+    const err: any = new Error('AI provider not supported');
+    err.code = 'AI_ERROR';
+    throw err;
+  }
+
+  const apiKey = Deno.env.get('OPENAI_API_KEY');
+  if (!apiKey) {
+    const err: any = new Error('Missing OPENAI_API_KEY');
+    err.code = 'AI_ERROR';
+    throw err;
+  }
+  const model = Deno.env.get('OPENAI_MODEL') || 'gpt-4.1';
+
+  // Truncate to keep context bounded
+  const MAX = 60_000;
+  const truncated = text.length > MAX;
+  const inputText = truncated ? text.slice(0, MAX) : text;
+
+  const system = SYSTEM_PROMPT;
+  const user = buildUserPrompt(inputText, truncated);
+
+  // First attempt
+  let first;
+  try {
+    first = await callOpenAIJSON({ apiKey, model, system, user });
+  } catch (e) {
+    // Hard failure before JSON — bubble up
+    throw e;
+  }
+
+  if (!looksLikeSchema(first.parsed)) {
+    // Retry once instructing JSON-only reprint
+    const retryUser =
+      user +
+      `
+
+If your previous message contained anything other than JSON or did not match the schema, REPRINT JSON-ONLY that strictly conforms to the schema.`;
+    const second = await callOpenAIJSON({ apiKey, model, system, user: retryUser });
+    if (!looksLikeSchema(second.parsed)) {
+      const err: any = new Error('Model output does not match schema after retry');
+      err.code = 'AI_BAD_OUTPUT';
+      err.raw = second.meta?.raw ?? first.meta?.raw;
+      throw err;
+    }
+    const result: ContractAnalysisResult = { ...second.parsed, meta: second.meta };
+    // Add a note to summary if truncated
+    if (truncated) result.summary = result.summary.trim() + ' (Note: analysis ran on a truncated excerpt.)';
+    return result;
+  }
+
+  const result: ContractAnalysisResult = { ...first.parsed, meta: first.meta };
+  if (truncated) result.summary = result.summary.trim() + ' (Note: analysis ran on a truncated excerpt.)';
+  return result;
 }
