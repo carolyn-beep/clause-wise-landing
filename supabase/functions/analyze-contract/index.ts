@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { runAIAnalysis } from '../_shared/ai/index.ts';
 import { ensureSafeInput, formatModerationMessage, type ModerationError } from '../_shared/ai/moderation.ts';
 import { runRuleAnalyzer } from '../_shared/ai/rule-analyzer.ts';
+import { ANALYZE_COOLDOWN_SECONDS, MAX_ANALYZE_CHARS } from '../_shared/config/rules.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -77,14 +78,48 @@ serve(async (req) => {
 
     console.log(`Authenticated user: ${user.id}`);
 
-    // 2) Validate input
+    // 2) Validate input and check limits
     const { title, source_text, useAI = true }: AnalyzeRequest = await req.json();
     
-    if (!source_text || typeof source_text !== 'string' || !source_text.trim()) {
-      return new Response(
-        JSON.stringify({ error: 'source_text is required and must be a non-empty string' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // 2a) Oversized text -> 413
+    const len = (source_text || '').length;
+    if (len === 0) {
+      return new Response(JSON.stringify({ error: 'Missing text' }), { 
+        status: 400, 
+        headers: { ...corsHeaders, 'content-type': 'application/json' }
+      });
+    }
+    if (len > MAX_ANALYZE_CHARS) {
+      return new Response(JSON.stringify({
+        error: 'Text too long',
+        message: `That's quite long (${len.toLocaleString()} chars). Please split the contract and analyze sections of up to ${MAX_ANALYZE_CHARS.toLocaleString()} characters.`
+      }), { 
+        status: 413, 
+        headers: { ...corsHeaders, 'content-type': 'application/json' }
+      });
+    }
+
+    // 2b) Simple per-user cooldown -> 429
+    const { data: recent, error: rErr } = await supabase
+      .from('analyses')
+      .select('id, created_at')
+      .eq('user_id', user.id)
+      .gte('created_at', new Date(Date.now() - ANALYZE_COOLDOWN_SECONDS * 1000).toISOString())
+      .limit(1);
+
+    if (!rErr && recent && recent.length > 0) {
+      // Return retry-after hint
+      return new Response(JSON.stringify({
+        error: 'Too many requests',
+        message: `Please wait a moment and try again.`,
+      }), {
+        status: 429,
+        headers: {
+          ...corsHeaders,
+          'content-type': 'application/json',
+          'retry-after': String(ANALYZE_COOLDOWN_SECONDS)
+        }
+      });
     }
 
     const trimmedText = source_text.trim();
