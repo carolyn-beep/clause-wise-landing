@@ -62,8 +62,6 @@ serve(async (req) => {
     const config = {
       ANALYZE_COOLDOWN_SECONDS,
       MAX_ANALYZE_CHARS,
-      environment: env,
-      authenticated_user: user.email || user.id
     };
 
     console.log(`Debug rules accessed by user: ${user.email || user.id}`);
