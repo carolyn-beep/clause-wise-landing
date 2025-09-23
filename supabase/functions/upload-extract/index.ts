@@ -54,6 +54,8 @@ serve(async (req) => {
     // Parse multipart form data
     const formData = await req.formData();
     const file = formData.get('file') as File;
+    const analyzeNow = formData.get('analyzeNow') === 'true';
+    const useAI = formData.get('useAI') !== 'false'; // Default to true unless explicitly false
     
     if (!file) {
       return new Response(
@@ -174,9 +176,76 @@ serve(async (req) => {
 
     console.log(`Text extraction complete. Length: ${extractedText.length} characters`);
 
+    // If analyzeNow is true, call the analyze-contract endpoint
+    if (analyzeNow && extractedText.trim()) {
+      console.log(`Running analysis via analyze-contract endpoint, useAI: ${useAI}`);
+      
+      try {
+        // Call the analyze-contract function
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+        const analyzeResponse = await fetch(`${supabaseUrl}/functions/v1/analyze-contract`, {
+          method: 'POST',
+          headers: {
+            'Authorization': authHeader,
+            'Content-Type': 'application/json',
+            'apikey': Deno.env.get('SUPABASE_ANON_KEY')!
+          },
+          body: JSON.stringify({
+            title: file.name.replace(/\.[^/.]+$/, ""), // Remove file extension for title
+            source_text: extractedText,
+            useAI
+          })
+        });
+
+        if (!analyzeResponse.ok) {
+          const errorData = await analyzeResponse.json().catch(() => ({ error: 'Unknown error' }));
+          console.error('Analysis failed:', errorData);
+          
+          // Return the analysis error directly to the client
+          return new Response(
+            JSON.stringify(errorData),
+            { 
+              status: analyzeResponse.status, 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+
+        const analysisResult = await analyzeResponse.json();
+        console.log(`Analysis complete via endpoint. Analysis ID: ${analysisResult.analysis_id}`);
+
+        // Return the analysis result
+        return new Response(
+          JSON.stringify({
+            success: true,
+            analyzed: true,
+            fileName: file.name,
+            fileSize: file.size,
+            notes: notes.length > 0 ? notes : undefined,
+            ...analysisResult
+          }),
+          { 
+            status: 200, 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          }
+        );
+
+      } catch (error) {
+        console.error('Error calling analyze-contract endpoint:', error);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Failed to analyze contract',
+            message: 'Text was extracted successfully, but analysis failed. Please try the analyze step manually.'
+          }),
+          { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     return new Response(
       JSON.stringify({ 
         success: true,
+        analyzed: false,
         extractedText,
         fileName: file.name,
         fileSize: file.size,
