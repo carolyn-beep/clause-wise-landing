@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { Progress } from "@/components/ui/progress";
 import { Upload as UploadIcon, FileText, Sparkles, Loader2, X, File, AlertCircle } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -19,6 +20,7 @@ const Upload = () => {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [analyzeImmediately, setAnalyzeImmediately] = useState(false);
+  const [useAI, setUseAI] = useState(true);
   const [isDragOver, setIsDragOver] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [canRetry, setCanRetry] = useState(false);
@@ -112,13 +114,14 @@ const Upload = () => {
 
       setUploadProgress(30);
 
-      // Create FormData with file, title, and analyzeNow
+      // Create FormData with file, title, analyzeNow, and useAI
       const formData = new FormData();
       formData.append('file', file);
       if (title.trim()) {
         formData.append('title', title.trim());
       }
       formData.append('analyzeNow', analyzeImmediately.toString());
+      formData.append('useAI', useAI.toString());
 
       setUploadProgress(60);
 
@@ -297,7 +300,8 @@ const Upload = () => {
       const { data, error } = await supabase.functions.invoke('analyze-contract', {
         body: {
           title: title.trim() || undefined,
-          source_text: sourceText.trim()
+          source_text: sourceText.trim(),
+          useAI: useAI
         }
       });
 
@@ -584,6 +588,23 @@ ALL SERVICES ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND.`;
                   placeholder="e.g., Freelance Web Development Agreement"
                   className="border-primary/20 focus:border-primary focus:ring-primary/20"
                 />
+              </div>
+
+              {/* AI Analysis Toggle */}
+              <div className="space-y-3 p-4 bg-muted/30 rounded-lg border border-border/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-3">
+                    <Label htmlFor="use-ai" className="font-medium">Use AI (beta)</Label>
+                    <Switch
+                      id="use-ai"
+                      checked={useAI}
+                      onCheckedChange={setUseAI}
+                    />
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  When on, your text is analyzed by our AI provider via our server. No legal advice.
+                </p>
               </div>
 
               <div className="space-y-2 text-left">
