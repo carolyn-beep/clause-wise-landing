@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { analyzeWithOpenAI } from '../_shared/ai/providers/openai.ts';
+import { runAIAnalysis } from '../_shared/ai/index.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -108,7 +108,7 @@ serve(async (req) => {
     // 2. Run AI analysis
     let analysisResult;
     try {
-      analysisResult = await analyzeWithOpenAI({ text: source_text });
+      analysisResult = await runAIAnalysis(source_text);
     } catch (error) {
       console.error('AI analysis error:', error);
       
