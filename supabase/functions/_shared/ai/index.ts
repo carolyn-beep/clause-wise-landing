@@ -1,19 +1,10 @@
-import { analyzeWithOpenAI } from "./providers/openai.ts";
+import { analyzeWithOpenAI, type ContractAnalysisResult } from "./providers/openai.ts";
 
 /**
  * Common interface for AI analysis providers
  */
 export interface AIAnalyzer {
-  analyze(input: { text: string }): Promise<{
-    summary: string;
-    overall_risk: 'low' | 'medium' | 'high';
-    flags: Array<{
-      clause: string;
-      severity: 'low' | 'medium' | 'high';
-      rationale: string;
-      suggestion: string;
-    }>;
-  }>;
+  analyze(input: { text: string }): Promise<ContractAnalysisResult>;
 }
 
 /**
@@ -47,3 +38,5 @@ export async function runAIAnalysis(text: string) {
   const analyzer = getAnalyzer();
   return analyzer.analyze({ text });
 }
+
+export { type ContractAnalysisResult, type AIFlag } from './providers/openai.ts';

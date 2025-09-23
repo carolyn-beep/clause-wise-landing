@@ -185,15 +185,30 @@ serve(async (req) => {
     }
 
     // 6) Insert ANALYSIS row
-    const { overall_risk, summary, flags } = result;
+    const { overall_risk, summary, flags, meta } = result;
+    const analysisInsertData: any = {
+      user_id: user.id,
+      contract_id: contract.id,
+      overall_risk,
+      summary
+    };
+
+    // Add AI telemetry if available
+    if (meta && result.aiRan) {
+      analysisInsertData.ai_provider = meta.provider;
+      analysisInsertData.ai_model = meta.model;
+      analysisInsertData.ai_tokens_in = meta.tokens_in;
+      analysisInsertData.ai_tokens_out = meta.tokens_out;
+      analysisInsertData.ai_latency_ms = meta.latency_ms;
+      // Only store raw response in non-production or if explicitly needed
+      if (Deno.env.get('ENVIRONMENT') !== 'production') {
+        analysisInsertData.ai_raw = meta.raw;
+      }
+    }
+
     const { data: analysis, error: aErr } = await supabase
       .from('analyses')
-      .insert({
-        user_id: user.id,
-        contract_id: contract.id,
-        overall_risk,
-        summary
-      })
+      .insert(analysisInsertData)
       .select()
       .single();
 

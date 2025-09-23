@@ -1,17 +1,30 @@
 import { getAIConfig } from '../../env-utils.ts';
 
 /**
- * Contract analysis result structure
+ * Contract analysis flag structure
+ */
+export interface AIFlag {
+  clause: string;
+  severity: 'low' | 'medium' | 'high';
+  rationale: string;
+  suggestion: string;
+}
+
+/**
+ * Contract analysis result structure with telemetry
  */
 export interface ContractAnalysisResult {
   summary: string;
   overall_risk: 'low' | 'medium' | 'high';
-  flags: Array<{
-    clause: string;
-    severity: 'low' | 'medium' | 'high';
-    rationale: string;
-    suggestion: string;
-  }>;
+  flags: AIFlag[];
+  meta?: {
+    provider: 'openai';
+    model?: string | null;
+    tokens_in?: number | null;
+    tokens_out?: number | null;
+    latency_ms?: number | null;
+    raw?: any; // keep undefined in production if you prefer
+  };
 }
 
 /**
@@ -110,6 +123,8 @@ export async function analyzeWithOpenAI({ text }: { text: string }): Promise<Con
   console.log(`Analyzing contract with OpenAI model: ${config.model}`);
   console.log(`Text length: ${processedText.length} characters`);
 
+  const t0 = Date.now(); // Start timing
+
   try {
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -145,6 +160,8 @@ export async function analyzeWithOpenAI({ text }: { text: string }): Promise<Con
       }),
     });
 
+    const latency_ms = Date.now() - t0; // Calculate latency
+
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`OpenAI API error: ${response.status} - ${errorText}`);
@@ -154,23 +171,23 @@ export async function analyzeWithOpenAI({ text }: { text: string }): Promise<Con
       };
     }
 
-    const data = await response.json();
+    const raw = await response.json(); // Keep full raw response
     
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      console.error('Invalid OpenAI response structure:', data);
+    if (!raw.choices || !raw.choices[0] || !raw.choices[0].message) {
+      console.error('Invalid OpenAI response structure:', raw);
       throw {
         code: 'AI_ERROR',
         message: 'Invalid response from OpenAI API'
       };
     }
 
-    const content = data.choices[0].message.content;
+    const content = raw.choices[0].message.content;
     console.log('OpenAI response content length:', content?.length || 0);
 
     // Parse the JSON response
-    let analysisResult: ContractAnalysisResult;
+    let parsed;
     try {
-      analysisResult = JSON.parse(content);
+      parsed = JSON.parse(content);
     } catch (parseError) {
       console.error('JSON parsing error:', parseError);
       console.error('Raw content:', content);
@@ -181,8 +198,8 @@ export async function analyzeWithOpenAI({ text }: { text: string }): Promise<Con
     }
 
     // Validate the response structure
-    if (!analysisResult.overall_risk || !analysisResult.summary || !Array.isArray(analysisResult.flags)) {
-      console.error('Invalid analysis result structure:', analysisResult);
+    if (!parsed.overall_risk || !parsed.summary || !Array.isArray(parsed.flags)) {
+      console.error('Invalid analysis result structure:', parsed);
       throw {
         code: 'AI_ERROR',
         message: 'AI response missing required fields'
@@ -191,15 +208,15 @@ export async function analyzeWithOpenAI({ text }: { text: string }): Promise<Con
 
     // Validate enum values
     const validRiskLevels = ['low', 'medium', 'high'];
-    if (!validRiskLevels.includes(analysisResult.overall_risk)) {
+    if (!validRiskLevels.includes(parsed.overall_risk)) {
       throw {
         code: 'AI_ERROR',
-        message: `Invalid overall_risk value: ${analysisResult.overall_risk}`
+        message: `Invalid overall_risk value: ${parsed.overall_risk}`
       };
     }
 
     // Validate flags
-    for (const flag of analysisResult.flags) {
+    for (const flag of parsed.flags) {
       if (!flag.clause || !flag.severity || !flag.rationale || !flag.suggestion) {
         throw {
           code: 'AI_ERROR',
@@ -214,8 +231,26 @@ export async function analyzeWithOpenAI({ text }: { text: string }): Promise<Con
       }
     }
 
-    console.log(`Analysis complete: ${analysisResult.flags.length} flags, overall risk: ${analysisResult.overall_risk}`);
-    return analysisResult;
+    // Extract telemetry metadata
+    const model = raw?.model ?? config.model ?? null;
+    const tokens_in = raw?.usage?.prompt_tokens ?? raw?.usage?.input_tokens ?? null;
+    const tokens_out = raw?.usage?.completion_tokens ?? raw?.usage?.output_tokens ?? null;
+
+    console.log(`Analysis complete: ${parsed.flags.length} flags, overall risk: ${parsed.overall_risk}`);
+    console.log(`Telemetry: model=${model}, tokens_in=${tokens_in}, tokens_out=${tokens_out}, latency=${latency_ms}ms`);
+
+    // Return result with telemetry metadata
+    return {
+      ...parsed,
+      meta: {
+        provider: 'openai',
+        model,
+        tokens_in,
+        tokens_out,
+        latency_ms,
+        raw // Consider omitting in production for privacy/size
+      }
+    } as ContractAnalysisResult;
 
   } catch (error) {
     // Re-throw our custom errors
