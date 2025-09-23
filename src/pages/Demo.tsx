@@ -68,12 +68,10 @@ const Demo = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZlY3d0cXVxZmJncGF3a214enZ6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTg2NDUyNjUsImV4cCI6MjA3NDIyMTI2NX0.xixQal5K_87D-fpOnLz1Fqx3kZUGeL3mbSZ2LH8gT-k'
         },
         body: JSON.stringify({
           source_text: sourceText,
-          title: title || "Demo Contract",
-          use_ai: useAI
+          useAI: useAI
         }),
       });
 
@@ -83,7 +81,22 @@ const Demo = () => {
       }
 
       const data = await response.json();
-      setAnalysis(data.analysis);
+      
+      // Transform the simplified response to match the expected format
+      const analysisData = {
+        id: 'demo-' + Date.now(),
+        overall_risk: data.overall_risk,
+        summary: data.summary,
+        created_at: new Date().toISOString(),
+        ai_provider: data.aiRan ? 'openai' : null,
+        ai_model: data.aiRan ? 'demo' : null,
+        ai_fallback_used: !data.aiRan,
+        contract: { title: title || "Demo Contract" },
+        flags_ai: data.aiRan ? data.flags : null,
+        flags_rule: !data.aiRan ? data.flags : null
+      };
+
+      setAnalysis(analysisData);
       setFlags(data.flags || []);
 
       toast({

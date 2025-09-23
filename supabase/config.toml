@@ -2,3 +2,6 @@ project_id = "fecwtquqfbgpawkmxzvz"
 
 [functions.api-debug-ai-secrets]
 verify_jwt = false
+
+[functions.api-demo-analyze]
+verify_jwt = false
