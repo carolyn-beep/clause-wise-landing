@@ -116,18 +116,20 @@ serve(async (req) => {
     const ruleBased = await runRuleAnalyzer(trimmedText);
 
     // 5) Optionally run AI analysis
-    let result;
+    let aiRequested = useAI === true;
+    let aiRan = false;
+    let aiFallbackUsed = false;
+    let aiResult: any = null;
     let ruleFlags = ruleBased.flags; // Keep original rule-based flags
     let aiFlags: Flag[] = []; // Keep AI flags separate
-    
-    if (useAI === true) {
+    let result;
+
+    if (aiRequested) {
       try {
-        // Content moderation check
         await ensureSafeInput(trimmedText);
-        
-        // Run AI analysis
-        const ai = await runAIAnalysis(trimmedText);
-        aiFlags = ai.flags; // Store AI flags separately
+        aiResult = await runAIAnalysis(trimmedText);
+        aiRan = true;
+        aiFlags = aiResult.flags; // Store AI flags separately
 
         // Merge results
         // a) Flags de-dup (prefer AI severity on conflicts)
@@ -145,7 +147,7 @@ serve(async (req) => {
         for (const f of ruleBased.flags) {
           byKey.set(norm(f.clause), { ...f });
         }
-        for (const f of ai.flags) {
+        for (const f of aiResult.flags) {
           const k = norm(f.clause);
           if (!byKey.has(k)) {
             byKey.set(k, { ...f });
@@ -163,37 +165,38 @@ serve(async (req) => {
 
         // b) Overall risk = max(ruleBased, ai)
         const rank = { low: 0, medium: 1, high: 2 };
-        const overall_risk = (rank[ai.overall_risk as keyof typeof rank] > rank[ruleBased.overall_risk as keyof typeof rank])
-          ? ai.overall_risk
+        const overall_risk = (rank[aiResult.overall_risk as keyof typeof rank] > rank[ruleBased.overall_risk as keyof typeof rank])
+          ? aiResult.overall_risk
           : ruleBased.overall_risk;
 
         // c) Summary prefer AI
-        const summary = ai.summary || ruleBased.summary;
+        const summary = aiResult.summary || ruleBased.summary;
 
-        result = { overall_risk, summary, flags: mergedFlags, aiRan: true, aiFallbackUsed: false, ai, ruleFlags, aiFlags };
-      } catch (err) {
-        // Moderation or AI error -> fall back to rule-based only
-        if (err && (err as ModerationError).code === 'CONTENT_BLOCKED') {
-          const moderationError = err as ModerationError;
+        result = { overall_risk, summary, flags: mergedFlags, ai: aiResult, ruleFlags, aiFlags };
+      } catch (err: any) {
+        if (err?.code === 'CONTENT_BLOCKED') {
           return new Response(JSON.stringify({
             error: 'Content blocked',
-            message: formatModerationMessage(moderationError.categories || [])
+            message: formatModerationMessage(err.categories || [])
           }), { 
             status: 400, 
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         }
         console.error('AI analysis failed', err);
-        result = { ...ruleBased, aiRan: false, aiFallbackUsed: true, ruleFlags, aiFlags: [] };
+        aiFallbackUsed = true;
+        // Fallback to rule-based results
+        result = { ...ruleBased, ruleFlags, aiFlags: [] };
       }
     } else {
-      result = { ...ruleBased, aiRan: false, aiFallbackUsed: false, ruleFlags, aiFlags: [] };
+      // AI was not requested; keep defaults (false/false)
+      result = { ...ruleBased, ruleFlags, aiFlags: [] };
     }
 
     // 6) Insert ANALYSIS row
     const { overall_risk, summary, flags } = result;
 
-    const aiMeta = result.aiRan && result.ai && result.ai.meta ? result.ai.meta : null;
+    const aiMeta = aiRan && aiResult && aiResult.meta ? aiResult.meta : null;
 
     const { data: analysis, error: aErr } = await supabase
       .from('analyses')
@@ -208,7 +211,7 @@ serve(async (req) => {
         ai_tokens_out: aiMeta ? (aiMeta.tokens_out ?? null) : null,
         ai_latency_ms: aiMeta ? (aiMeta.latency_ms ?? null) : null,
         ai_raw:        aiMeta ? (aiMeta.raw ?? null) : null,
-        ai_fallback_used: result.aiFallbackUsed || false
+        ai_fallback_used: aiFallbackUsed
       })
       .select()
       .single();
@@ -249,10 +252,10 @@ serve(async (req) => {
       overall_risk,
       summary,
       flags,
-      flags_ai: result.aiRan ? (result.aiFlags || []) : [],
+      flags_ai: aiRan ? (result.aiFlags || []) : [],
       flags_rule: result.ruleFlags || [],
-      aiRan: result.aiRan,
-      aiFallbackUsed: result.aiFallbackUsed
+      aiRan: aiRan,
+      aiFallbackUsed: aiFallbackUsed
     };
 
     console.log(`Analysis complete: ${overall_risk} risk, ${flags.length} flags, AI: ${result.aiRan}, fallback: ${result.aiFallbackUsed}`);
