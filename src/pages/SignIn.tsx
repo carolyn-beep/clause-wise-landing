@@ -65,11 +65,18 @@ const SignIn = () => {
                 Send magic link
               </Button>
 
-              <div className="text-center text-sm text-muted-foreground">
-                Don't have an account?{" "}
-                <Link to="/sign-in" className="text-primary hover:underline">
-                  Sign up here
-                </Link>
+              <div className="text-center text-sm text-muted-foreground space-y-2">
+                <div>
+                  Don't have an account?{" "}
+                  <Link to="/sign-in" className="text-primary hover:underline">
+                    Sign up here
+                  </Link>
+                </div>
+                <div>
+                  <Link to="/demo" className="text-muted-foreground/70 hover:text-muted-foreground transition-smooth">
+                    Just trying it out? Try the demo →
+                  </Link>
+                </div>
               </div>
             </CardContent>
           </Card>
