@@ -69,7 +69,10 @@ serve(async (req) => {
     
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
       return new Response(
-        JSON.stringify({ error: 'Invalid file type. Only PDF, DOCX, and TXT files are allowed.' }),
+        JSON.stringify({ 
+          error: 'Only PDF, DOCX, or TXT files are supported',
+          user_friendly: true 
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -78,7 +81,10 @@ serve(async (req) => {
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
       return new Response(
-        JSON.stringify({ error: 'File too large. Maximum size is 10MB.' }),
+        JSON.stringify({ 
+          error: 'File too large (max 10MB)',
+          user_friendly: true 
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -86,38 +92,58 @@ serve(async (req) => {
     console.log(`File details: ${file.name}, ${file.type}, ${file.size} bytes`);
 
     let extractedText = '';
+    let notes: string[] = [];
 
     // Extract text based on file type
     if (file.type === 'text/plain' || fileExtension === '.txt') {
       // Simple text file - read directly
       extractedText = await file.text();
+      
+      // Check if text is empty or very short (might be corrupted file)
+      if (!extractedText.trim()) {
+        notes.push("No text content found in the file");
+      } else if (extractedText.trim().length < 50) {
+        notes.push("File contains very little text - please verify this is the correct file");
+      }
     } else if (file.type === 'application/pdf' || fileExtension === '.pdf') {
-      // For PDF files, we'll use a simple extraction approach
-      // In a production environment, you might want to use a more sophisticated PDF parser
       try {
-        // Convert file to base64 and attempt text extraction
+        // For PDF files, check if it's likely an image-only PDF
         const arrayBuffer = await file.arrayBuffer();
-        const uint8Array = new Uint8Array(arrayBuffer);
+        const pdfBytes = new Uint8Array(arrayBuffer);
+        const pdfString = new TextDecoder().decode(pdfBytes.slice(0, 1000));
         
-        // For now, we'll return a message indicating PDF processing is needed
-        // In production, you would integrate with a PDF parsing library
-        extractedText = `PDF file "${file.name}" uploaded successfully. Please note: Advanced PDF text extraction is not yet implemented. Please copy and paste the contract text manually for now.`;
+        // Simple heuristic: if PDF has very few text objects, it's likely scanned/image-only
+        const textObjectCount = (pdfString.match(/BT|Tj|TJ/g) || []).length;
+        
+        if (textObjectCount === 0) {
+          extractedText = `Please copy and paste your contract text below. This looks like a scanned/image PDF. OCR isn't enabled yet.`;
+          notes.push("This looks like a scanned/image PDF. OCR isn't enabled yet.");
+        } else {
+          extractedText = `Please copy and paste your contract text below. PDF text extraction is not yet implemented.`;
+          notes.push("PDF text extraction is not yet implemented");
+        }
         
       } catch (error) {
         console.error('PDF processing error:', error);
         return new Response(
-          JSON.stringify({ error: 'Failed to process PDF file. Please try converting to text format.' }),
+          JSON.stringify({ 
+            error: 'Failed to process PDF file',
+            user_friendly: true 
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
     } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileExtension === '.docx') {
-      // For DOCX files, similar approach
       try {
-        extractedText = `DOCX file "${file.name}" uploaded successfully. Please note: Advanced DOCX text extraction is not yet implemented. Please copy and paste the contract text manually for now.`;
+        extractedText = `Please copy and paste your contract text below. DOCX text extraction is not yet implemented.`;
+        notes.push("DOCX text extraction is not yet implemented");
       } catch (error) {
         console.error('DOCX processing error:', error);
         return new Response(
-          JSON.stringify({ error: 'Failed to process DOCX file. Please try converting to text format.' }),
+          JSON.stringify({ 
+            error: 'Failed to process DOCX file',
+            user_friendly: true 
+          }),
           { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
@@ -153,7 +179,8 @@ serve(async (req) => {
         success: true,
         extractedText,
         fileName: file.name,
-        fileSize: file.size
+        fileSize: file.size,
+        notes: notes.length > 0 ? notes : undefined
       }),
       { 
         status: 200, 

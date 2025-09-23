@@ -20,6 +20,8 @@ const Upload = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [analyzeImmediately, setAnalyzeImmediately] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [canRetry, setCanRetry] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,12 +64,12 @@ const Upload = () => {
     const fileExtension = '.' + file.name.split('.').pop()?.toLowerCase();
     
     if (!allowedTypes.includes(file.type) && !allowedExtensions.includes(fileExtension)) {
-      return 'Invalid file type. Only PDF, DOCX, and TXT files are allowed.';
+      return 'Only PDF, DOCX, or TXT files are supported';
     }
 
     const maxSize = 10 * 1024 * 1024; // 10MB
     if (file.size > maxSize) {
-      return 'File too large. Maximum size is 10MB.';
+      return 'File too large (max 10MB)';
     }
 
     return null;
@@ -77,6 +79,8 @@ const Upload = () => {
   const handleFileExtraction = async (file: File) => {
     const validationError = validateFile(file);
     if (validationError) {
+      setUploadError(validationError);
+      setCanRetry(false);
       toast({
         title: "Invalid file",
         description: validationError,
@@ -87,12 +91,16 @@ const Upload = () => {
 
     setIsUploading(true);
     setUploadProgress(0);
+    setUploadError(null);
+    setCanRetry(false);
 
     try {
       // Get current session
       const { data: { session }, error: authError } = await supabase.auth.getSession();
       
       if (authError || !session) {
+        setUploadError("Authentication required");
+        setCanRetry(false);
         toast({
           title: "Authentication required",
           description: "Please sign in to upload files.",
@@ -121,9 +129,13 @@ const Upload = () => {
 
       if (error) {
         console.error('Upload error:', error);
+        const errorMessage = error.message || "Failed to extract text from file";
+        setUploadError(errorMessage);
+        setCanRetry(!error.user_friendly); // Allow retry for network errors, not validation errors
+        
         toast({
           title: "Upload failed",
-          description: error.message || "Failed to extract text from file.",
+          description: errorMessage,
           variant: "destructive",
         });
         return;
@@ -140,7 +152,7 @@ const Upload = () => {
       }
 
       // Fill textarea with extracted text
-      setSourceText(data.source_text || '');
+      setSourceText(data.extractedText || '');
       
       // Set title to returned title or fallback to filename without extension
       const extractedTitle = data.title || file.name.replace(/\.[^/.]+$/, "");
@@ -152,27 +164,42 @@ const Upload = () => {
       const notes = data.notes || [];
       if (notes.length > 0) {
         toast({
-          title: "Text extracted with notes",
-          description: notes.join(', '),
+          title: "File processed with notes",
+          description: notes.join('. '),
           variant: "default",
         });
       } else {
         toast({
-          title: "Text extracted successfully",
-          description: `Extracted text from ${file.name}`,
+          title: "File processed successfully",
+          description: `Processed ${file.name}`,
         });
       }
 
+      // Clear any previous errors on success
+      setUploadError(null);
+      setCanRetry(false);
+
     } catch (error) {
       console.error('Unexpected error:', error);
+      const errorMessage = "Network error occurred during file upload";
+      setUploadError(errorMessage);
+      setCanRetry(true); // Network errors are retryable
+      
       toast({
-        title: "Something went wrong",
-        description: "An unexpected error occurred during file upload.",
+        title: "Upload failed",
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setIsUploading(false);
       setUploadProgress(0);
+    }
+  };
+
+  // Retry upload
+  const handleRetryUpload = () => {
+    if (uploadedFile && canRetry) {
+      handleFileExtraction(uploadedFile);
     }
   };
 
@@ -427,27 +454,71 @@ ALL SERVICES ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND.`;
                   </div>
                 ) : uploadedFile ? (
                   <div className="space-y-4">
-                    <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                      <FileText className="w-8 h-8 text-green-600" />
-                    </div>
-                    <div className="space-y-2">
-                      <p className="font-medium text-green-800">{uploadedFile.name}</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatFileSize(uploadedFile.size)} • Text extracted successfully
-                      </p>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setUploadedFile(null);
-                        }}
-                        className="text-xs"
-                      >
-                        <X className="w-3 h-3 mr-1" />
-                        Remove
-                      </Button>
-                    </div>
+                    {uploadError ? (
+                      <>
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto">
+                          <AlertCircle className="w-8 h-8 text-red-600" />
+                        </div>
+                        <div className="space-y-3">
+                          <p className="font-medium text-red-800">{uploadedFile.name}</p>
+                          <p className="text-sm text-red-600">{uploadError}</p>
+                          <div className="flex gap-2 justify-center">
+                            {canRetry && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRetryUpload();
+                                }}
+                                className="text-xs"
+                                disabled={isUploading}
+                              >
+                                Try Again
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setUploadedFile(null);
+                                setUploadError(null);
+                                setCanRetry(false);
+                              }}
+                              className="text-xs"
+                            >
+                              <X className="w-3 h-3 mr-1" />
+                              Remove
+                            </Button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                          <FileText className="w-8 h-8 text-green-600" />
+                        </div>
+                        <div className="space-y-2">
+                          <p className="font-medium text-green-800">{uploadedFile.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {formatFileSize(uploadedFile.size)} • File processed successfully
+                          </p>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setUploadedFile(null);
+                            }}
+                            className="text-xs"
+                          >
+                            <X className="w-3 h-3 mr-1" />
+                            Remove
+                          </Button>
+                        </div>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className="space-y-4">
