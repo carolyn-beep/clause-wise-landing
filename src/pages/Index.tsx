@@ -12,8 +12,8 @@ const Index = () => {
       {/* Hero Section */}
       <section className="px-4 py-16 md:py-24 lg:py-32 text-center">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 text-foreground leading-tight">
-            ClauseWise — AI contract review for freelancers
+          <h1 className="text-5xl md:text-7xl font-semibold tracking-tight leading-tight mb-6 bg-gradient-to-r from-[#3B82F6] via-[#6366F1] to-[#4338CA] bg-clip-text text-transparent">
+            ClauseWise AI contract review for freelancers
           </h1>
           <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
             Upload a contract and get a simple traffic-light risk report with safer wording.
