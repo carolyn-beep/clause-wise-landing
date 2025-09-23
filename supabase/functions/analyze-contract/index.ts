@@ -215,9 +215,6 @@ serve(async (req) => {
       })
       .select()
       .single();
-      })
-      .select()
-      .single();
 
     if (aErr || !analysis) {
       console.error('Analysis insert error:', aErr);
