@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, FileText, AlertTriangle, CheckCircle, AlertCircle, Copy } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ArrowLeft, FileText, AlertTriangle, CheckCircle, AlertCircle, Copy, Bot, Zap } from "lucide-react";
 import { format } from "date-fns";
 
 interface Analysis {
@@ -16,6 +17,8 @@ interface Analysis {
   created_at: string;
   ai_provider: string | null;
   ai_model: string | null;
+  flags_ai?: Flag[];
+  flags_rule?: Flag[];
   contract: {
     title: string;
   };
@@ -37,6 +40,7 @@ const Report = () => {
   const [flags, setFlags] = useState<Flag[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCopying, setIsCopying] = useState(false);
+  const [activeTab, setActiveTab] = useState("all");
 
   useEffect(() => {
     const fetchAnalysisData = async () => {
@@ -152,8 +156,31 @@ const Report = () => {
     }
   };
 
+  const getCurrentFlags = () => {
+    switch (activeTab) {
+      case "ai":
+        return analysis?.flags_ai || [];
+      case "rule":
+        return analysis?.flags_rule || [];
+      default:
+        return flags;
+    }
+  };
+
+  const getTabFlags = (tab: string) => {
+    switch (tab) {
+      case "ai":
+        return analysis?.flags_ai || [];
+      case "rule":
+        return analysis?.flags_rule || [];
+      default:
+        return flags;
+    }
+  };
+
   const handleCopySuggestions = async () => {
-    if (flags.length === 0) {
+    const currentFlags = getCurrentFlags();
+    if (currentFlags.length === 0) {
       toast({
         title: "No suggestions to copy",
         description: "There are no flagged clauses with suggestions.",
@@ -178,7 +205,7 @@ const Report = () => {
       
       suggestionsText += `SUGGESTED IMPROVEMENTS:\n\n`;
       
-      flags.forEach((flag, index) => {
+      currentFlags.forEach((flag, index) => {
         suggestionsText += `${index + 1}. CLAUSE ISSUE (${flag.severity.toUpperCase()} PRIORITY)\n`;
         suggestionsText += `Problematic Text: "${flag.clause}"\n`;
         suggestionsText += `Why This Matters: ${flag.rationale}\n`;
@@ -191,7 +218,7 @@ const Report = () => {
       
       toast({
         title: "Suggestions copied!",
-        description: `${flags.length} suggestions copied to clipboard for easy sharing.`,
+        description: `${currentFlags.length} suggestions copied to clipboard for easy sharing.`,
       });
     } catch (error) {
       console.error('Copy error:', error);
@@ -280,16 +307,16 @@ const Report = () => {
           </CardContent>
         </Card>
 
-        {/* Flags List */}
-        {flags.length > 0 ? (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <h2 className="text-xl font-semibold">Issues Found ({flags.length})</h2>
+        {/* Flags List with Segmented Control */}
+        <div className="space-y-6">
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+            <div className="flex items-center justify-between flex-wrap gap-4 mb-4">
+              <h2 className="text-xl font-semibold">Issues Found</h2>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={handleCopySuggestions}
-                disabled={isCopying}
+                disabled={isCopying || getCurrentFlags().length === 0}
                 className="gap-2"
               >
                 {isCopying ? (
@@ -305,53 +332,183 @@ const Report = () => {
                 )}
               </Button>
             </div>
-            {flags.map((flag) => (
-              <Card key={flag.id} className="border-l-4 border-l-muted">
-                <CardContent className="pt-6">
-                  <div className="space-y-4">
-                    {/* Header with severity */}
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          {getSeverityBadge(flag.severity)}
-                        </div>
-                        <div className="bg-muted p-3 rounded-md">
-                          <code className="text-sm font-mono text-foreground">
-                            {flag.clause.length > 200 
-                              ? `${flag.clause.substring(0, 200)}...` 
-                              : flag.clause}
-                          </code>
-                        </div>
-                      </div>
-                    </div>
+            
+            <TabsList className="grid w-full grid-cols-3 mb-6">
+              <TabsTrigger value="all" className="gap-2">
+                <FileText className="w-4 h-4" />
+                All ({flags.length})
+              </TabsTrigger>
+              <TabsTrigger 
+                value="ai" 
+                disabled={!analysis?.flags_ai || analysis.flags_ai.length === 0}
+                className="gap-2"
+              >
+                <Bot className="w-4 h-4" />
+                AI only ({getTabFlags("ai").length})
+              </TabsTrigger>
+              <TabsTrigger 
+                value="rule" 
+                disabled={!analysis?.flags_rule || analysis.flags_rule.length === 0}
+                className="gap-2"
+              >
+                <Zap className="w-4 h-4" />
+                Rule-based only ({getTabFlags("rule").length})
+              </TabsTrigger>
+            </TabsList>
 
-                    {/* Rationale and Suggestion */}
-                    <div className="grid md:grid-cols-2 gap-4">
-                      <div>
-                        <h4 className="font-medium mb-2 text-red-800">Why this matters:</h4>
-                        <p className="text-sm text-muted-foreground">{flag.rationale}</p>
-                      </div>
-                      <div>
-                        <h4 className="font-medium mb-2 text-green-800">Suggested approach:</h4>
-                        <p className="text-sm text-muted-foreground">{flag.suggestion}</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        ) : (
-          <Card>
-            <CardContent className="py-12 text-center">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Issues Found</h3>
-              <p className="text-muted-foreground">
-                Great news! Our analysis didn't find any obvious red flags in this contract.
-              </p>
-            </CardContent>
-          </Card>
-        )}
+            <TabsContent value="all">
+              {flags.length > 0 ? (
+                <div className="space-y-4">
+                  {flags.map((flag) => (
+                    <Card key={flag.id} className="border-l-4 border-l-muted">
+                      <CardContent className="pt-6">
+                        <div className="space-y-4">
+                          {/* Header with severity */}
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                {getSeverityBadge(flag.severity)}
+                              </div>
+                              <div className="bg-muted p-3 rounded-md">
+                                <code className="text-sm font-mono text-foreground">
+                                  {flag.clause.length > 200 
+                                    ? `${flag.clause.substring(0, 200)}...` 
+                                    : flag.clause}
+                                </code>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Rationale and Suggestion */}
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium mb-2 text-red-800">Why this matters:</h4>
+                              <p className="text-sm text-muted-foreground">{flag.rationale}</p>
+                            </div>
+                            <div>
+                              <h4 className="font-medium mb-2 text-green-800">Suggested approach:</h4>
+                              <p className="text-sm text-muted-foreground">{flag.suggestion}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Issues Found</h3>
+                    <p className="text-muted-foreground">
+                      Great news! Our analysis didn't find any obvious red flags in this contract.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="ai">
+              {analysis?.flags_ai && analysis.flags_ai.length > 0 ? (
+                <div className="space-y-4">
+                  {analysis.flags_ai.map((flag, index) => (
+                    <Card key={`ai-${index}`} className="border-l-4 border-l-blue-200">
+                      <CardContent className="pt-6">
+                        <div className="space-y-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                {getSeverityBadge(flag.severity)}
+                                <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">AI</Badge>
+                              </div>
+                              <div className="bg-muted p-3 rounded-md">
+                                <code className="text-sm font-mono text-foreground">
+                                  {flag.clause.length > 200 
+                                    ? `${flag.clause.substring(0, 200)}...` 
+                                    : flag.clause}
+                                </code>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium mb-2 text-red-800">Why this matters:</h4>
+                              <p className="text-sm text-muted-foreground">{flag.rationale}</p>
+                            </div>
+                            <div>
+                              <h4 className="font-medium mb-2 text-green-800">Suggested approach:</h4>
+                              <p className="text-sm text-muted-foreground">{flag.suggestion}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Bot className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No AI Flags</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Not available for this analysis.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+
+            <TabsContent value="rule">
+              {analysis?.flags_rule && analysis.flags_rule.length > 0 ? (
+                <div className="space-y-4">
+                  {analysis.flags_rule.map((flag, index) => (
+                    <Card key={`rule-${index}`} className="border-l-4 border-l-orange-200">
+                      <CardContent className="pt-6">
+                        <div className="space-y-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                {getSeverityBadge(flag.severity)}
+                                <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200">Rule</Badge>
+                              </div>
+                              <div className="bg-muted p-3 rounded-md">
+                                <code className="text-sm font-mono text-foreground">
+                                  {flag.clause.length > 200 
+                                    ? `${flag.clause.substring(0, 200)}...` 
+                                    : flag.clause}
+                                </code>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                              <h4 className="font-medium mb-2 text-red-800">Why this matters:</h4>
+                              <p className="text-sm text-muted-foreground">{flag.rationale}</p>
+                            </div>
+                            <div>
+                              <h4 className="font-medium mb-2 text-green-800">Suggested approach:</h4>
+                              <p className="text-sm text-muted-foreground">{flag.suggestion}</p>
+                            </div>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Zap className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <h3 className="text-lg font-semibold mb-2">No Rule-based Flags</h3>
+                    <p className="text-muted-foreground text-sm">
+                      Not available for this analysis.
+                    </p>
+                  </CardContent>
+                </Card>
+              )}
+            </TabsContent>
+          </Tabs>
+        </div>
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row gap-4 pt-6">
