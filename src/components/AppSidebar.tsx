@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Upload, History, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import clausewiseLogo from "@/assets/clausewise-logo.png";
 
 const items = [
   { title: "Upload", url: "/app", icon: Upload },
@@ -37,8 +38,17 @@ export function AppSidebar() {
   return (
     <Sidebar className={isCollapsed ? "w-14" : "w-64"} collapsible="icon">
       <div className="p-4">
-        <Link to="/" className={`text-xl font-bold bg-gradient-hero bg-clip-text text-transparent ${isCollapsed ? "text-center" : ""}`}>
-          {isCollapsed ? "C" : "ClauseWise"}
+        <Link to="/" className="flex items-center gap-2">
+          <img 
+            src={clausewiseLogo} 
+            alt="ClauseWise" 
+            className="w-6 h-6"
+          />
+          {!isCollapsed && (
+            <span className="text-xl font-bold bg-gradient-hero bg-clip-text text-transparent">
+              ClauseWise
+            </span>
+          )}
         </Link>
       </div>
 
