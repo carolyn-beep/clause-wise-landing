@@ -16,6 +16,12 @@ export type Database = {
     Tables: {
       analyses: {
         Row: {
+          ai_latency_ms: number | null
+          ai_model: string | null
+          ai_provider: string | null
+          ai_raw: Json | null
+          ai_tokens_in: number | null
+          ai_tokens_out: number | null
           contract_id: string
           created_at: string
           id: string
@@ -24,6 +30,12 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          ai_latency_ms?: number | null
+          ai_model?: string | null
+          ai_provider?: string | null
+          ai_raw?: Json | null
+          ai_tokens_in?: number | null
+          ai_tokens_out?: number | null
           contract_id: string
           created_at?: string
           id?: string
@@ -32,6 +44,12 @@ export type Database = {
           user_id: string
         }
         Update: {
+          ai_latency_ms?: number | null
+          ai_model?: string | null
+          ai_provider?: string | null
+          ai_raw?: Json | null
+          ai_tokens_in?: number | null
+          ai_tokens_out?: number | null
           contract_id?: string
           created_at?: string
           id?: string
