@@ -252,13 +252,13 @@ serve(async (req) => {
       overall_risk,
       summary,
       flags,
-      flags_ai: aiRan ? (result.aiFlags || []) : [],
-      flags_rule: result.ruleFlags || [],
-      aiRan: aiRan,
-      aiFallbackUsed: aiFallbackUsed
+      flags_ai: aiRan ? aiFlags : [],
+      flags_rule: ruleFlags || [],
+      aiRan,
+      aiFallbackUsed
     };
 
-    console.log(`Analysis complete: ${overall_risk} risk, ${flags.length} flags, AI: ${result.aiRan}, fallback: ${result.aiFallbackUsed}`);
+    console.log(`Analysis complete: ${overall_risk} risk, ${flags.length} flags, AI: ${aiRan}, fallback: ${aiFallbackUsed}`);
 
     return new Response(
       JSON.stringify(response),
