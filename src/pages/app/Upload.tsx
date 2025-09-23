@@ -76,6 +76,50 @@ const Upload = () => {
       setIsAnalyzing(false);
     }
   };
+
+  // Sample contract text for development testing
+  const sampleContractText = `FREELANCE WEB DEVELOPMENT AGREEMENT
+
+This Agreement is entered into between ClauseWise Technologies Inc. ("Client") and Freelancer ("Developer") for web development services.
+
+1. SCOPE OF WORK
+Developer shall provide web development services as outlined in the project specification document attached hereto.
+
+2. PAYMENT TERMS
+Client agrees to pay Developer $5,000 for the completed work. Payment is due within 30 days of invoice. Late fees of 1.5% per month shall apply to overdue amounts.
+
+3. INDEMNIFICATION
+Developer agrees to indemnify and hold harmless Client from any and all claims, damages, losses, and expenses (including attorney's fees) arising out of or relating to Developer's performance under this Agreement, regardless of the cause of such claims.
+
+4. LIMITATION OF LIABILITY
+IN NO EVENT SHALL CLIENT'S LIABILITY TO DEVELOPER EXCEED THE TOTAL AMOUNT PAID UNDER THIS AGREEMENT. CLIENT SHALL NOT BE LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, OR CONSEQUENTIAL DAMAGES.
+
+5. INTELLECTUAL PROPERTY OWNERSHIP
+All work product, including but not limited to code, designs, concepts, and documentation created by Developer shall become the exclusive property of Client upon creation.
+
+6. AUTO-RENEWAL
+This agreement shall automatically renew for successive one-year terms unless either party provides 90 days written notice of non-renewal.
+
+7. TERMINATION FOR CONVENIENCE
+Client may terminate this agreement at any time for any reason or no reason with 5 days written notice to Developer.
+
+8. GOVERNING LAW
+This Agreement shall be governed by the laws of Delaware, and any disputes shall be resolved through binding arbitration in Delaware.
+
+9. NON-COMPETE
+Developer agrees not to work for any competing businesses in the web development industry for a period of 24 months following termination of this agreement.
+
+10. WARRANTY DISCLAIMER
+ALL SERVICES ARE PROVIDED "AS IS" WITHOUT WARRANTY OF ANY KIND.`;
+
+  const handleQuickSeed = () => {
+    setTitle("Sample Freelance Web Development Agreement");
+    setSourceText(sampleContractText);
+    toast({
+      title: "Sample contract loaded",
+      description: "Click 'Analyze Contract' to test the full flow.",
+    });
+  };
   return (
     <div className="p-6 md:p-8 lg:p-12">
       <div className="max-w-4xl mx-auto">
@@ -126,6 +170,21 @@ const Upload = () => {
                   required
                 />
               </div>
+
+              {/* Developer Quick Seed Button - Only in development */}
+              {import.meta.env.DEV && (
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleQuickSeed}
+                    className="text-xs bg-yellow-50 border-yellow-200 text-yellow-800 hover:bg-yellow-100"
+                  >
+                    🚀 Quick Seed (Dev Only)
+                  </Button>
+                </div>
+              )}
               
               <div className="flex items-center justify-center">
                 <Button 
