@@ -14,7 +14,27 @@ const AuthCallback = () => {
   useEffect(() => {
     const handleAuthCallback = async () => {
       try {
-        const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+        const currentUrl = new URL(window.location.href);
+        const hashParams = new URLSearchParams(currentUrl.hash.startsWith('#') ? currentUrl.hash.slice(1) : '');
+        const hasAccessToken = hashParams.has('access_token') || currentUrl.searchParams.has('access_token');
+        const code = currentUrl.searchParams.get('code');
+
+        let data: any, error: any;
+        if (hasAccessToken) {
+          // Magic link / implicit flow -> tokens in URL hash
+          const access_token = hashParams.get('access_token');
+          const refresh_token = hashParams.get('refresh_token');
+          ({ data, error } = await supabase.auth.setSession({
+            access_token: access_token ?? '',
+            refresh_token: refresh_token ?? '',
+          }));
+        } else if (code) {
+          // OAuth or PKCE-based flows provide a code in the query string
+          ({ data, error } = await supabase.auth.exchangeCodeForSession(code));
+        } else {
+          // Nothing to exchange; show error
+          error = { message: 'No auth credentials in URL' } as any;
+        }
         
         if (error) {
           console.error('Auth callback error:', error);
@@ -27,17 +47,13 @@ const AuthCallback = () => {
           return;
         }
 
-        if (data.session) {
+        if (data?.session) {
           setStatus('success');
           toast({
             title: "Successfully signed in!",
             description: "Redirecting to your dashboard...",
           });
-          
-          // Small delay to show success state before redirect
-          setTimeout(() => {
-            navigate('/app');
-          }, 1500);
+          setTimeout(() => navigate('/app'), 800);
         } else {
           setStatus('error');
           toast({
