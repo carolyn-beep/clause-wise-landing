@@ -4,6 +4,7 @@ import { runAIAnalysis } from '../_shared/ai/index.ts';
 import { ensureSafeInput, formatModerationMessage, type ModerationError } from '../_shared/ai/moderation.ts';
 import { runRuleAnalyzer } from '../_shared/ai/rule-analyzer.ts';
 import { ANALYZE_COOLDOWN_SECONDS, MAX_ANALYZE_CHARS } from '../_shared/config/rules.ts';
+import { newReqId, logEvent } from '../_shared/obs/logger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -36,17 +37,33 @@ interface AnalyzeResponse {
 }
 
 serve(async (req) => {
+  const req_id = newReqId();
+  const startTime = Date.now();
+  logEvent('analyze_start', { req_id, route: '/api/analyze-contract' });
+
   console.log(`${req.method} ${req.url}`);
 
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response(null, { 
+      headers: { 
+        ...corsHeaders,
+        'x-req-id': req_id 
+      } 
+    });
   }
 
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Method not allowed' }),
-      { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 405, 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'x-req-id': req_id 
+        } 
+      }
     );
   }
 
@@ -72,11 +89,19 @@ serve(async (req) => {
       console.error('Auth error:', authError)
       return new Response(
         JSON.stringify({ error: 'Invalid authentication' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 401, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'x-req-id': req_id 
+          } 
+        }
       );
     }
 
     console.log(`Authenticated user: ${user.id}`);
+    logEvent('analyze_authed', { req_id, user_id: user.id });
 
     // 2) Validate input and check limits
     const { title, source_text, useAI = true }: AnalyzeRequest = await req.json();
@@ -86,7 +111,11 @@ serve(async (req) => {
     if (len === 0) {
       return new Response(JSON.stringify({ error: 'Missing text' }), { 
         status: 400, 
-        headers: { ...corsHeaders, 'content-type': 'application/json' }
+        headers: { 
+          ...corsHeaders, 
+          'content-type': 'application/json',
+          'x-req-id': req_id 
+        }
       });
     }
     if (len > MAX_ANALYZE_CHARS) {
@@ -95,7 +124,11 @@ serve(async (req) => {
         message: `That's quite long (${len.toLocaleString()} chars). Please split the contract and analyze sections of up to ${MAX_ANALYZE_CHARS.toLocaleString()} characters.`
       }), { 
         status: 413, 
-        headers: { ...corsHeaders, 'content-type': 'application/json' }
+        headers: { 
+          ...corsHeaders, 
+          'content-type': 'application/json',
+          'x-req-id': req_id 
+        }
       });
     }
 
@@ -117,7 +150,8 @@ serve(async (req) => {
         headers: {
           ...corsHeaders,
           'content-type': 'application/json',
-          'retry-after': String(ANALYZE_COOLDOWN_SECONDS)
+          'retry-after': String(ANALYZE_COOLDOWN_SECONDS),
+          'x-req-id': req_id
         }
       });
     }
@@ -141,7 +175,14 @@ serve(async (req) => {
       console.error('Contract insert error:', cErr);
       return new Response(
         JSON.stringify({ error: 'Failed to save contract' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 500, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'x-req-id': req_id 
+          } 
+        }
       );
     }
 
@@ -160,11 +201,22 @@ serve(async (req) => {
     let result;
 
     if (aiRequested) {
+      logEvent('ai_attempt', { req_id });
+      
       try {
         await ensureSafeInput(trimmedText);
         aiResult = await runAIAnalysis(trimmedText);
         aiRan = true;
         aiFlags = aiResult.flags; // Store AI flags separately
+
+        logEvent('ai_success', {
+          req_id,
+          ai_provider: aiResult?.meta?.provider || null,
+          ai_model: aiResult?.meta?.model || null,
+          ai_tokens_in: aiResult?.meta?.tokens_in || null,
+          ai_tokens_out: aiResult?.meta?.tokens_out || null,
+          ai_latency_ms: aiResult?.meta?.latency_ms || null
+        });
 
         // Merge results
         // a) Flags de-dup (prefer AI severity on conflicts)
@@ -209,13 +261,19 @@ serve(async (req) => {
 
         result = { overall_risk, summary, flags: mergedFlags, ai: aiResult, ruleFlags, aiFlags };
       } catch (err: any) {
+        logEvent('ai_failure', { req_id, error_code: err?.code || 'AI_ERROR' });
+        
         if (err?.code === 'CONTENT_BLOCKED') {
           return new Response(JSON.stringify({
             error: 'Content blocked',
             message: formatModerationMessage(err.categories || [])
           }), { 
             status: 400, 
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            headers: { 
+              ...corsHeaders, 
+              'Content-Type': 'application/json',
+              'x-req-id': req_id 
+            }
           });
         }
         console.error('AI analysis failed', err);
@@ -255,11 +313,24 @@ serve(async (req) => {
       console.error('Analysis insert error:', aErr);
       return new Response(
         JSON.stringify({ error: 'Failed to save analysis' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { 
+          status: 500, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'x-req-id': req_id 
+          } 
+        }
       );
     }
 
     console.log(`Analysis saved with ID: ${analysis.id}`);
+    logEvent('analyze_persisted', {
+      req_id, 
+      user_id: user.id, 
+      contract_id: contract.id, 
+      analysis_id: analysis.id
+    });
 
     // 7) Bulk insert FLAGS
     if (flags.length > 0) {
@@ -307,7 +378,14 @@ serve(async (req) => {
     console.error('Error analyzing contract:', error);
     return new Response(
       JSON.stringify({ error: 'Internal server error' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      { 
+        status: 500, 
+        headers: { 
+          ...corsHeaders, 
+          'Content-Type': 'application/json',
+          'x-req-id': req_id 
+        } 
+      }
     );
   }
 });
