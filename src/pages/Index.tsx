@@ -13,15 +13,15 @@ const Index = () => {
       <section className="px-4 py-16 md:py-24 lg:py-32 text-center">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 bg-gradient-hero bg-clip-text text-transparent leading-tight">
-            AI Contract Review for Freelancers
+            Contract review, without the lawyer tax
           </h1>
           <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
-            Get instant insights on your contracts. Identify risks, understand terms, and negotiate with confidence. Built specifically for freelancers and independent contractors.
+            ClauseWise flags risky clauses and suggests safer language — perfect for freelancers and small teams.
           </p>
           
           <Link to="/app">
             <Button variant="hero" size="lg" className="text-lg px-12 py-4 mb-16">
-              Get Started Free
+              Get started free
             </Button>
           </Link>
         </div>
