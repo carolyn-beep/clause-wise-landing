@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Clock, ExternalLink, AlertTriangle, CheckCircle, AlertCircle, Plus, Search, Filter } from "lucide-react";
+import { FileText, Clock, ExternalLink, AlertTriangle, CheckCircle, AlertCircle, Plus, Search, Filter, Bot, Zap } from "lucide-react";
 import { format } from "date-fns";
 
 interface ContractWithAnalysis {
@@ -19,6 +19,7 @@ interface ContractWithAnalysis {
     id: string;
     overall_risk: 'low' | 'medium' | 'high';
     created_at: string;
+    ai_provider: string | null;
   };
 }
 
@@ -44,7 +45,8 @@ const History = () => {
             analyses!inner (
               id,
               overall_risk,
-              created_at
+              created_at,
+              ai_provider
             )
           `)
           .order('created_at', { ascending: false });
@@ -86,7 +88,8 @@ const History = () => {
               contract.latest_analysis = {
                 id: analysis.id,
                 overall_risk: analysis.overall_risk,
-                created_at: analysis.created_at
+                created_at: analysis.created_at,
+                ai_provider: analysis.ai_provider
               };
             }
           });
@@ -182,6 +185,24 @@ const History = () => {
             High Risk
           </Badge>
         );
+    }
+  };
+
+  const getAnalysisTypeBadge = (aiProvider: string | null) => {
+    if (aiProvider) {
+      return (
+        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200">
+          <Bot className="w-3 h-3 mr-1" />
+          AI
+        </Badge>
+      );
+    } else {
+      return (
+        <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200">
+          <Zap className="w-3 h-3 mr-1" />
+          Rule
+        </Badge>
+      );
     }
   };
 
@@ -319,13 +340,14 @@ const History = () => {
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <div className="min-w-full divide-y divide-border">
-                  {/* Header */}
-                  <div className="bg-muted/50 px-6 py-3 grid grid-cols-12 gap-4 font-medium text-sm text-muted-foreground">
-                    <div className="col-span-12 md:col-span-4">Contract</div>
-                    <div className="col-span-6 md:col-span-2">Created</div>
-                    <div className="col-span-6 md:col-span-3">Risk Level</div>
-                    <div className="col-span-12 md:col-span-3 text-right">Actions</div>
-                  </div>
+                   {/* Header */}
+                   <div className="bg-muted/50 px-6 py-3 grid grid-cols-12 gap-4 font-medium text-sm text-muted-foreground">
+                     <div className="col-span-12 md:col-span-4">Contract</div>
+                     <div className="col-span-6 md:col-span-2">Created</div>
+                     <div className="col-span-6 md:col-span-2">Risk Level</div>
+                     <div className="col-span-6 md:col-span-1">Type</div>
+                     <div className="col-span-12 md:col-span-3 text-right">Actions</div>
+                   </div>
                   
                   {/* Contracts */}
                   {filteredContracts.map((contract) => (
@@ -351,17 +373,24 @@ const History = () => {
                         </span>
                       </div>
                       
-                      {/* Risk Level */}
-                      <div className="col-span-6 md:col-span-3">
-                        {contract.latest_analysis ? (
-                          getRiskBadge(contract.latest_analysis.overall_risk)
-                        ) : (
-                          <Badge variant="secondary" className="bg-gray-100 text-gray-600">
-                            <Clock className="w-3 h-3 mr-1" />
-                            Pending
-                          </Badge>
-                        )}
-                      </div>
+                       {/* Risk Level */}
+                       <div className="col-span-6 md:col-span-2">
+                         {contract.latest_analysis ? (
+                           getRiskBadge(contract.latest_analysis.overall_risk)
+                         ) : (
+                           <Badge variant="secondary" className="bg-gray-100 text-gray-600">
+                             <Clock className="w-3 h-3 mr-1" />
+                             Pending
+                           </Badge>
+                         )}
+                       </div>
+
+                       {/* Analysis Type */}
+                       <div className="col-span-6 md:col-span-1">
+                         {contract.latest_analysis ? (
+                           getAnalysisTypeBadge(contract.latest_analysis.ai_provider)
+                         ) : null}
+                       </div>
                       
                       {/* Actions */}
                       <div className="col-span-12 md:col-span-3 flex justify-end">
