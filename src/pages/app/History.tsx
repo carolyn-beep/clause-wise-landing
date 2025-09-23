@@ -5,8 +5,10 @@ import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { FileText, Clock, ExternalLink, AlertTriangle, CheckCircle, AlertCircle, Plus } from "lucide-react";
+import { FileText, Clock, ExternalLink, AlertTriangle, CheckCircle, AlertCircle, Plus, Search, Filter } from "lucide-react";
 import { format } from "date-fns";
 
 interface ContractWithAnalysis {
@@ -22,7 +24,10 @@ interface ContractWithAnalysis {
 
 const History = () => {
   const [contracts, setContracts] = useState<ContractWithAnalysis[]>([]);
+  const [filteredContracts, setFilteredContracts] = useState<ContractWithAnalysis[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [riskFilter, setRiskFilter] = useState<'all' | 'low' | 'medium' | 'high'>('all');
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -131,6 +136,29 @@ const History = () => {
     fetchContracts();
   }, [toast]);
 
+  // Filter contracts based on search term and risk filter
+  useEffect(() => {
+    let filtered = [...contracts];
+
+    // Filter by search term (title)
+    if (searchTerm.trim()) {
+      filtered = filtered.filter(contract =>
+        (contract.title || "Untitled Contract")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // Filter by risk level
+    if (riskFilter !== 'all') {
+      filtered = filtered.filter(contract =>
+        contract.latest_analysis?.overall_risk === riskFilter
+      );
+    }
+
+    setFilteredContracts(filtered);
+  }, [contracts, searchTerm, riskFilter]);
+
   const getRiskBadge = (risk: 'low' | 'medium' | 'high') => {
     switch (risk) {
       case 'low':
@@ -209,10 +237,79 @@ const History = () => {
             </CardContent>
           </Card>
         ) : (
+          <>
+            {/* Search and Filter Controls */}
+            <Card className="mb-6">
+              <CardContent className="p-4">
+                <div className="flex flex-col sm:flex-row gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground w-4 h-4" />
+                    <Input
+                      placeholder="Search contracts by title..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Filter className="w-4 h-4 text-muted-foreground" />
+                    <Select value={riskFilter} onValueChange={(value: 'all' | 'low' | 'medium' | 'high') => setRiskFilter(value)}>
+                      <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Filter by risk" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Risk Levels</SelectItem>
+                        <SelectItem value="low">Low Risk</SelectItem>
+                        <SelectItem value="medium">Medium Risk</SelectItem>
+                        <SelectItem value="high">High Risk</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {(searchTerm || riskFilter !== 'all') && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                    <p className="text-sm text-muted-foreground">
+                      Showing {filteredContracts.length} of {contracts.length} contracts
+                    </p>
+                    <Button 
+                      variant="ghost" 
+                      size="sm"
+                      onClick={() => {
+                        setSearchTerm("");
+                        setRiskFilter('all');
+                      }}
+                    >
+                      Clear Filters
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {filteredContracts.length === 0 ? (
+              <Card>
+                <CardContent className="p-12 text-center">
+                  <Search className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No matches found</h3>
+                  <p className="text-muted-foreground mb-4">
+                    Try adjusting your search terms or filters.
+                  </p>
+                  <Button 
+                    variant="outline"
+                    onClick={() => {
+                      setSearchTerm("");
+                      setRiskFilter('all');
+                    }}
+                  >
+                    Clear Filters
+                  </Button>
+                </CardContent>
+              </Card>
+            ) : (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Contract History ({contracts.length})</span>
+                <span>Contract History ({filteredContracts.length})</span>
                 <Button variant="outline" onClick={() => navigate("/app/upload")}>
                   <Plus className="w-4 h-4 mr-2" />
                   New Analysis
@@ -231,7 +328,7 @@ const History = () => {
                   </div>
                   
                   {/* Contracts */}
-                  {contracts.map((contract) => (
+                  {filteredContracts.map((contract) => (
                     <div key={contract.id} className="px-6 py-4 grid grid-cols-12 gap-4 items-center hover:bg-muted/30 transition-colors">
                       {/* Contract Title */}
                       <div className="col-span-12 md:col-span-4">
@@ -289,6 +386,8 @@ const History = () => {
               </div>
             </CardContent>
           </Card>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Upload as UploadIcon, FileText, Sparkles, Loader2 } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,36 @@ const Upload = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Auto-save and load draft from localStorage
+  useEffect(() => {
+    // Load saved draft on component mount
+    const savedTitle = localStorage.getItem('clausewise-draft-title');
+    const savedText = localStorage.getItem('clausewise-draft-text');
+    
+    if (savedTitle) {
+      setTitle(savedTitle);
+    }
+    if (savedText) {
+      setSourceText(savedText);
+    }
+  }, []);
+
+  // Auto-save title to localStorage
+  useEffect(() => {
+    localStorage.setItem('clausewise-draft-title', title);
+  }, [title]);
+
+  // Auto-save text to localStorage
+  useEffect(() => {
+    localStorage.setItem('clausewise-draft-text', sourceText);
+  }, [sourceText]);
+
+  // Clear draft after successful analysis
+  const clearDraft = () => {
+    localStorage.removeItem('clausewise-draft-title');
+    localStorage.removeItem('clausewise-draft-text');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -64,6 +94,9 @@ const Upload = () => {
 
       // Navigate to the report page with the analysis ID
       navigate(`/app/report/${data.analysis_id}`);
+      
+      // Clear the draft after successful analysis
+      clearDraft();
 
     } catch (error) {
       console.error('Unexpected error:', error);
