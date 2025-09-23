@@ -12,29 +12,18 @@ const Index = () => {
       {/* Hero Section */}
       <section className="px-4 py-16 md:py-24 lg:py-32 text-center">
         <div className="max-w-4xl mx-auto">
-          <h1 className="text-3xl md:text-5xl font-bold mb-6 text-foreground leading-tight">
-            Spot contract risks before you sign
+          <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 text-foreground leading-tight">
+            ClauseWise — AI contract review for freelancers
           </h1>
-          <p className="text-lg md:text-xl text-muted-foreground mb-12 max-w-[60ch] mx-auto font-normal leading-relaxed">
-            AI flags issues and suggests safer wording—fast.
+          <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
+            Upload a contract and get a simple traffic-light risk report with safer wording.
           </p>
           
-          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-6">
-            <Link to="/app">
-              <Button size="lg" className="text-lg px-8 py-4 w-full sm:w-auto">
-                Analyze a contract
-              </Button>
-            </Link>
-            <Link to="/app?demo=1">
-              <Button variant="ghost" size="lg" className="text-lg px-8 py-4 w-full sm:w-auto">
-                View sample report
-              </Button>
-            </Link>
-          </div>
-          
-          <p className="text-sm text-muted-foreground">
-            No credit card. No signup for demo.
-          </p>
+          <Link to="/app">
+            <Button size="lg" className="text-lg px-12 py-4 mb-16">
+              Get started
+            </Button>
+          </Link>
         </div>
       </section>
 
