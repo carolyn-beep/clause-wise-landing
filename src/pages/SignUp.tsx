@@ -21,12 +21,19 @@ const SignUp = () => {
 
   const handleEmailPasswordSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) return;
+    console.log("Sign up form submitted", { email, password: "***" });
+    
+    if (!email || !password) {
+      console.log("Missing email or password");
+      return;
+    }
 
     setIsSigningUp(true);
     
     try {
-      const { error } = await supabase.auth.signUp({
+      console.log("Calling supabase.auth.signUp with redirect:", `${window.location.origin}/auth/callback`);
+      
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -34,13 +41,17 @@ const SignUp = () => {
         }
       });
 
+      console.log("Supabase signUp response:", { data, error });
+
       if (error) {
+        console.error("Sign up error:", error);
         toast({
           title: "Sign up failed",
           description: error.message,
           variant: "destructive",
         });
       } else {
+        console.log("Sign up successful, showing success message");
         toast({
           title: "Check your email to confirm",
           description: "We've sent you a confirmation link to complete your registration.",
@@ -50,6 +61,7 @@ const SignUp = () => {
         setPassword("");
       }
     } catch (err) {
+      console.error("Unexpected sign up error:", err);
       toast({
         title: "Sign up failed",
         description: "An unexpected error occurred",
@@ -62,25 +74,36 @@ const SignUp = () => {
 
   const handleMagicLinkSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!magicEmail) return;
+    console.log("Magic link form submitted", { email: magicEmail });
+    
+    if (!magicEmail) {
+      console.log("Missing magic link email");
+      return;
+    }
 
     setIsSendingMagicLink(true);
     
     try {
-      const { error } = await supabase.auth.signInWithOtp({
+      console.log("Calling supabase.auth.signInWithOtp");
+      
+      const { data, error } = await supabase.auth.signInWithOtp({
         email: magicEmail,
         options: {
           emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       });
 
+      console.log("Supabase signInWithOtp response:", { data, error });
+
       if (error) {
+        console.error("Magic link error:", error);
         toast({
           title: "Failed to send magic link",
           description: error.message,
           variant: "destructive",
         });
       } else {
+        console.log("Magic link sent successfully");
         toast({
           title: "Magic link sent",
           description: "Check your email for the magic sign-in link.",
