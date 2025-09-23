@@ -50,6 +50,24 @@ serve(async (req) => {
 
     console.log(`Deleting all data for user: ${user.id}`);
 
+    // First, collect all storage_path values for this user
+    const { data: contracts, error: fetchError } = await supabase
+      .from('contracts')
+      .select('storage_path')
+      .eq('user_id', user.id)
+      .not('storage_path', 'is', null);
+
+    if (fetchError) {
+      console.error('Error fetching storage paths:', fetchError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch storage paths' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const storagePaths = contracts?.map(c => c.storage_path).filter(Boolean) || [];
+    console.log(`Found ${storagePaths.length} files to delete from storage`);
+
     // Delete user data in correct order (due to foreign key constraints)
     // 1. Delete flags first (references analyses)
     const { error: flagsError } = await supabase
@@ -91,6 +109,26 @@ serve(async (req) => {
         JSON.stringify({ error: 'Failed to delete contracts data' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
+    }
+
+    // 4. Delete storage objects
+    const storageErrors = [];
+    for (const storagePath of storagePaths) {
+      const { error: storageError } = await supabase.storage
+        .from('contracts')
+        .remove([storagePath]);
+      
+      if (storageError) {
+        console.error(`Error deleting storage object ${storagePath}:`, storageError);
+        storageErrors.push(`${storagePath}: ${storageError.message}`);
+      } else {
+        console.log(`Successfully deleted storage object: ${storagePath}`);
+      }
+    }
+
+    if (storageErrors.length > 0) {
+      console.warn(`Some storage files could not be deleted: ${storageErrors.join(', ')}`);
+      // Don't fail the entire operation for storage cleanup issues
     }
 
     console.log(`Successfully deleted all data for user: ${user.id}`);
