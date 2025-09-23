@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { runAIAnalysis } from '../_shared/ai/index.ts';
+import { ensureSafeInput, formatModerationMessage, type ModerationError } from '../_shared/ai/moderation.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,7 +106,26 @@ serve(async (req) => {
     const contractId = contractData.id;
     console.log(`Contract saved with ID: ${contractId}`);
 
-    // 2. Run AI analysis
+    // 2. Content moderation check
+    try {
+      await ensureSafeInput(source_text);
+    } catch (error) {
+      if ((error as ModerationError).code === 'CONTENT_BLOCKED') {
+        const moderationError = error as ModerationError;
+        console.log('Content blocked by moderation');
+        return new Response(
+          JSON.stringify({ 
+            error: formatModerationMessage(moderationError.categories),
+            code: 'CONTENT_BLOCKED',
+            contract_id: contractId
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      // Other errors are already handled in ensureSafeInput (fail open)
+    }
+
+    // 3. Run AI analysis
     let analysisResult;
     try {
       analysisResult = await runAIAnalysis(source_text);
