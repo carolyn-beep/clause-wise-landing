@@ -36,7 +36,7 @@ const SignUp = () => {
         email,
         password,
         options: {
-          emailRedirectTo: 'https://clausewise-ai.com/auth/callback'
+          emailRedirectTo: `${window.location.origin}/auth/callback`
         }
       });
 

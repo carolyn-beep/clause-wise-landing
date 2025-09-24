@@ -14,6 +14,8 @@ const SignIn = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isSigningIn, setIsSigningIn] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [isSendingLink, setIsSendingLink] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
 
@@ -57,6 +59,55 @@ const SignIn = () => {
       });
     } finally {
       setIsSigningIn(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!email) {
+      toast({ title: "Enter your email", description: "Add your email above first." });
+      return;
+    }
+    setIsResending(true);
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) {
+        toast({ title: "Could not resend", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Confirmation email sent", description: "Check your inbox to confirm your email." });
+      }
+    } catch (err) {
+      console.error("Unexpected resend error:", err);
+      toast({ title: "Unexpected error", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  const handleSendMagicLink = async () => {
+    if (!email) {
+      toast({ title: "Enter your email", description: "Add your email above first." });
+      return;
+    }
+    setIsSendingLink(true);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+      });
+      if (error) {
+        toast({ title: "Could not send magic link", description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Magic link sent", description: "Check your email to sign in." });
+      }
+    } catch (err) {
+      console.error("Unexpected magic link error:", err);
+      toast({ title: "Unexpected error", description: "Please try again.", variant: "destructive" });
+    } finally {
+      setIsSendingLink(false);
     }
   };
 
@@ -124,6 +175,42 @@ const SignIn = () => {
                 </Button>
               </form>
 
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleResendConfirmation}
+                  disabled={isResending || !email}
+                >
+                  {isResending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Sending confirmation...
+                    </>
+                  ) : (
+                    "Resend confirmation email"
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="w-full"
+                  onClick={handleSendMagicLink}
+                  disabled={isSendingLink || !email}
+                >
+                  {isSendingLink ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Sending magic link...
+                    </>
+                  ) : (
+                    "Email me a magic link"
+                  )}
+                </Button>
+              </div>
 
               <div className="text-center text-sm text-muted-foreground space-y-2">
                 <div>
