@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,7 @@ const SignUp = () => {
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [showSignInLink, setShowSignInLink] = useState(false);
   const { toast } = useToast();
+  const navigate = useNavigate();
 
   const handleEmailPasswordSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -49,12 +50,26 @@ const SignUp = () => {
           variant: "destructive",
         });
       } else {
-        console.log("Sign up successful, showing success message");
-        toast({
-          title: "Check your email to confirm",
-          description: "We've sent you a confirmation link to complete your registration.",
+        console.log("Sign up successful, attempting auto sign-in");
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
         });
-        setShowSignInLink(true);
+
+        if (signInError) {
+          toast({
+            title: "Account created",
+            description:
+              "Please sign in to continue. If email confirmation is required, confirm your email or ask the admin to disable confirmations for testing.",
+          });
+          setShowSignInLink(true);
+        } else {
+          toast({
+            title: "Welcome!",
+            description: "Your account has been created and you are now signed in.",
+          });
+          navigate('/app');
+        }
         setEmail("");
         setPassword("");
       }
