@@ -128,16 +128,40 @@ async function callOpenAIJSON({
   system: string;
   user: string;
 }) {
-  const endpoint = 'https://api.openai.com/v1/chat/completions';
+  // Determine which API to use based on model family
+  // Newer models (gpt-5, o3, o4*) use the Responses API and do not support temperature/max_tokens
+  const isResponses = /^(gpt-5|o3|o4)/i.test(model);
+  const endpoint = isResponses
+    ? 'https://api.openai.com/v1/responses'
+    : 'https://api.openai.com/v1/chat/completions';
 
-  const body = {
-    model,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: user }
-    ],
-    temperature: 0.25
-  } as const;
+  const body = isResponses
+    ? {
+        model,
+        input: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ],
+        // Strict JSON schema for structured output
+        response_format: {
+          type: 'json_schema',
+          json_schema: { name: 'ClauseWiseAnalysis', schema: CLAUSEWISE_JSON_SCHEMA, strict: true }
+        },
+        // Use the correct token parameter for newer models
+        max_completion_tokens: 1024
+      }
+    : {
+        model,
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: user }
+        ],
+        // Legacy chat completions supports temperature and max_tokens
+        temperature: 0.2,
+        max_tokens: 1024,
+        // Ask for JSON object to improve well-formedness
+        response_format: { type: 'json_object' }
+      };
 
   const t0 = Date.now();
   const res = await fetch(endpoint, {
@@ -179,7 +203,7 @@ async function callOpenAIJSON({
 
   const meta = {
     provider: 'openai' as const,
-    model: raw?.model ?? Deno.env.get('OPENAI_MODEL') ?? null,
+    model: raw?.model ?? model ?? null,
     tokens_in: raw?.usage?.input_tokens ?? raw?.usage?.prompt_tokens ?? null,
     tokens_out: raw?.usage?.output_tokens ?? raw?.usage?.completion_tokens ?? null,
     latency_ms,
@@ -196,13 +220,14 @@ export async function analyzeWithOpenAI({ text }: { text: string }): Promise<Con
     throw err;
   }
 
-  const apiKey = Deno.env.get('OPENAI_API_KEY');
-  if (!apiKey) {
-    const err: any = new Error('Missing OPENAI_API_KEY');
-    err.code = 'AI_ERROR';
-    throw err;
+  // Read AI config and sanitize model
+  const { apiKey, model: cfgModel } = getAIConfig();
+  let model = cfgModel;
+  // Guard against misconfigured secrets where OPENAI_MODEL is set to an API key
+  if (!model || model.toLowerCase().startsWith('sk-')) {
+    console.warn('Invalid OPENAI_MODEL detected, falling back to gpt-4o-mini');
+    model = 'gpt-4o-mini';
   }
-  const model = Deno.env.get('OPENAI_MODEL') || 'gpt-4.1';
 
   // Truncate to keep context bounded
   const MAX = 60_000;
