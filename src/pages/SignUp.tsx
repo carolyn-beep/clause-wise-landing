@@ -4,18 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
+
 import Navigation from "@/components/Navigation";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Mail, ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2 } from "lucide-react";
 
 const SignUp = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [magicEmail, setMagicEmail] = useState("");
   const [isSigningUp, setIsSigningUp] = useState(false);
-  const [isSendingMagicLink, setIsSendingMagicLink] = useState(false);
   const [showSignInLink, setShowSignInLink] = useState(false);
   const { toast } = useToast();
 
@@ -72,54 +70,6 @@ const SignUp = () => {
     }
   };
 
-  const handleMagicLinkSignUp = async (e: React.FormEvent) => {
-    e.preventDefault();
-    console.log("Magic link form submitted", { email: magicEmail });
-    
-    if (!magicEmail) {
-      console.log("Missing magic link email");
-      return;
-    }
-
-    setIsSendingMagicLink(true);
-    
-    try {
-      console.log("Calling supabase.auth.signInWithOtp");
-      
-      const { data, error } = await supabase.auth.signInWithOtp({
-        email: magicEmail,
-        options: {
-          emailRedirectTo: 'https://clausewise-ai.com/auth/callback'
-        }
-      });
-
-      console.log("Supabase signInWithOtp response:", { data, error });
-
-      if (error) {
-        console.error("Magic link error:", error);
-        toast({
-          title: "Failed to send magic link",
-          description: error.message,
-          variant: "destructive",
-        });
-      } else {
-        console.log("Magic link sent successfully");
-        toast({
-          title: "Magic link sent",
-          description: "Check your email for the magic sign-in link.",
-        });
-        setMagicEmail("");
-      }
-    } catch (err) {
-      toast({
-        title: "Failed to send magic link",
-        description: "An unexpected error occurred",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSendingMagicLink(false);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -185,48 +135,6 @@ const SignUp = () => {
                 </Button>
               </form>
 
-              <div className="relative">
-                <Separator />
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="bg-card px-3 text-sm text-muted-foreground">or</span>
-                </div>
-              </div>
-
-              {/* Magic Link Form */}
-              <form onSubmit={handleMagicLinkSignUp} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="magic-email">Email for magic link</Label>
-                  <Input 
-                    id="magic-email"
-                    type="email" 
-                    placeholder="Enter your email"
-                    value={magicEmail}
-                    onChange={(e) => setMagicEmail(e.target.value)}
-                    disabled={isSendingMagicLink}
-                    className="border-border focus:border-primary focus:ring-primary/20"
-                    required
-                  />
-                </div>
-                <Button 
-                  type="submit"
-                  variant="outline" 
-                  className="w-full" 
-                  size="lg"
-                  disabled={isSendingMagicLink || !magicEmail}
-                >
-                  {isSendingMagicLink ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Mail className="w-4 h-4 mr-2" />
-                      Send magic link
-                    </>
-                  )}
-                </Button>
-              </form>
 
               <div className="text-center text-sm text-muted-foreground space-y-2">
                 <div>
