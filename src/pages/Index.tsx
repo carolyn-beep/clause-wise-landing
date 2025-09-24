@@ -2,9 +2,11 @@ import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
+import { useAuth } from "@/contexts/AuthContext";
 import { CheckCircle, Shield, Zap, Clock } from "lucide-react";
 
 const Index = () => {
+  const { user } = useAuth();
   return (
     <div className="min-h-screen bg-background">
       <Navigation />
@@ -19,9 +21,9 @@ const Index = () => {
             Upload a contract and get a simple traffic-light risk report with safer wording.
           </p>
           
-          <Link to="/app">
+          <Link to={user ? "/app" : "/sign-up"}>
             <Button size="lg" className="text-lg px-12 py-4 mb-16">
-              Get started
+              {user ? "Go to Dashboard" : "Get started"}
             </Button>
           </Link>
         </div>

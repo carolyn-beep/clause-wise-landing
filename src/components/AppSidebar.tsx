@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/sidebar";
 import { Upload, History, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/contexts/AuthContext";
 import clausewiseLogo from "@/assets/clausewise-logo.png";
 
 const items = [
@@ -23,6 +24,7 @@ const items = [
 
 export function AppSidebar() {
   const { state } = useSidebar();
+  const { signOut } = useAuth();
   const location = useLocation();
   const currentPath = location.pathname;
 
@@ -76,12 +78,15 @@ export function AppSidebar() {
       </SidebarContent>
 
       <div className="mt-auto p-4">
-        <Link to="/">
-          <Button variant="ghost" size={isCollapsed ? "icon" : "default"} className="w-full justify-start">
-            <LogOut className="h-4 w-4" />
-            {!isCollapsed && <span className="ml-2">Sign Out</span>}
-          </Button>
-        </Link>
+        <Button 
+          variant="ghost" 
+          size={isCollapsed ? "icon" : "default"} 
+          className="w-full justify-start"
+          onClick={signOut}
+        >
+          <LogOut className="h-4 w-4" />
+          {!isCollapsed && <span className="ml-2">Sign Out</span>}
+        </Button>
       </div>
 
       <SidebarTrigger className="absolute -right-3 top-4" />
