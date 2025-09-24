@@ -156,59 +156,68 @@ serve(async (req) => {
       }
     } else if (file.type === 'application/pdf' || fileExtension === '.pdf') {
       try {
-        // For PDF files, check if it's likely an image-only PDF
+        // Extract text from PDF using pdf-parse library
         const arrayBuffer = await file.arrayBuffer();
-        const pdfBytes = new Uint8Array(arrayBuffer);
-        const pdfString = new TextDecoder().decode(pdfBytes.slice(0, 1000));
         
-        // Simple heuristic: if PDF has very few text objects, it's likely scanned/image-only
-        const textObjectCount = (pdfString.match(/BT|Tj|TJ/g) || []).length;
+        // Import pdf-parse dynamically (it's a CommonJS module)
+        const pdfParse = await import('https://esm.sh/pdf-parse@1.1.1');
+        const pdf = await pdfParse.default(arrayBuffer);
         
-        if (textObjectCount === 0) {
-          extractedText = `Please copy and paste your contract text below. This looks like a scanned/image PDF. OCR isn't enabled yet.`;
-          notes.push("This looks like a scanned/image PDF. OCR isn't enabled yet.");
+        extractedText = pdf.text;
+        
+        // Check if text extraction was successful
+        if (!extractedText || extractedText.trim().length < 50) {
+          // Fallback: check if it's likely an image-only PDF
+          const pdfBytes = new Uint8Array(arrayBuffer);
+          const pdfString = new TextDecoder().decode(pdfBytes.slice(0, 1000));
+          const textObjectCount = (pdfString.match(/BT|Tj|TJ/g) || []).length;
+          
+          if (textObjectCount === 0) {
+            extractedText = `Please copy and paste your contract text below. This looks like a scanned/image PDF. OCR isn't enabled yet.`;
+            notes.push("This looks like a scanned/image PDF. OCR isn't enabled yet.");
+          } else {
+            extractedText = `Please copy and paste your contract text below. PDF text extraction found very little readable text.`;
+            notes.push("PDF text extraction found very little readable text");
+          }
         } else {
-          extractedText = `Please copy and paste your contract text below. PDF text extraction is not yet implemented.`;
-          notes.push("PDF text extraction is not yet implemented");
+          console.log(`Successfully extracted ${extractedText.length} characters from PDF`);
         }
         
       } catch (error) {
         console.error('PDF processing error:', error);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Failed to process PDF file',
-            user_friendly: true 
-          }),
-          { 
-            status: 500, 
-            headers: { 
-              ...corsHeaders, 
-              'Content-Type': 'application/json',
-              'x-req-id': req_id 
-            } 
-          }
-        );
+        // Fallback to manual input
+        extractedText = `Please copy and paste your contract text below. PDF text extraction failed: ${error.message}`;
+        notes.push("PDF text extraction failed - please copy and paste the text manually");
       }
     } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileExtension === '.docx') {
       try {
-        extractedText = `Please copy and paste your contract text below. DOCX text extraction is not yet implemented.`;
-        notes.push("DOCX text extraction is not yet implemented");
+        // Extract text from DOCX using mammoth library
+        const arrayBuffer = await file.arrayBuffer();
+        
+        // Import mammoth dynamically
+        const mammoth = await import('https://esm.sh/mammoth@1.11.0');
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        
+        extractedText = result.value;
+        
+        // Check if text extraction was successful
+        if (!extractedText || extractedText.trim().length < 50) {
+          extractedText = `Please copy and paste your contract text below. DOCX text extraction found very little readable text.`;
+          notes.push("DOCX text extraction found very little readable text");
+        } else {
+          console.log(`Successfully extracted ${extractedText.length} characters from DOCX`);
+        }
+        
+        // Add any messages from mammoth
+        if (result.messages && result.messages.length > 0) {
+          console.log('Mammoth messages:', result.messages);
+        }
+        
       } catch (error) {
         console.error('DOCX processing error:', error);
-        return new Response(
-          JSON.stringify({ 
-            error: 'Failed to process DOCX file',
-            user_friendly: true 
-          }),
-          { 
-            status: 500, 
-            headers: { 
-              ...corsHeaders, 
-              'Content-Type': 'application/json',
-              'x-req-id': req_id 
-            } 
-          }
-        );
+        // Fallback to manual input
+        extractedText = `Please copy and paste your contract text below. DOCX text extraction failed: ${error.message}`;
+        notes.push("DOCX text extraction failed - please copy and paste the text manually");
       }
     }
 
@@ -238,7 +247,13 @@ serve(async (req) => {
     console.log(`Text extraction complete. Length: ${extractedText.length} characters`);
 
     // If analyzeNow is true, call the analyze-contract endpoint
-    if (analyzeNow && extractedText.trim()) {
+    // But only if we have meaningful extracted text (not placeholder messages)
+    const isPlaceholder = extractedText.includes('Please copy and paste your contract text below') || 
+                         extractedText.includes('extraction is not yet implemented') ||
+                         extractedText.includes('extraction failed') ||
+                         extractedText.trim().length < 100;
+    
+    if (analyzeNow && extractedText.trim() && !isPlaceholder) {
       console.log(`Running analysis via analyze-contract endpoint, useAI: ${useAI}`);
       
       try {
@@ -312,6 +327,29 @@ serve(async (req) => {
           }
         );
       }
+    } else if (analyzeNow && isPlaceholder) {
+      // Analysis was requested but skipped due to placeholder text
+      console.log('Analysis skipped - extracted text appears to be placeholder content');
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true,
+          analyzed: false,
+          extractedText,
+          fileName: file.name,
+          fileSize: file.size,
+          notes: [...(notes || []), "Analysis skipped - text extraction returned placeholder content. Please copy and paste your contract text manually and try again."],
+          message: "File processed but analysis was skipped because text extraction was not successful. Please copy and paste your contract text and analyze manually."
+        }),
+        { 
+          status: 200, 
+          headers: { 
+            ...corsHeaders, 
+            'Content-Type': 'application/json',
+            'x-req-id': req_id 
+          } 
+        }
+      );
     }
 
     logEvent('upload_end', {

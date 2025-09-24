@@ -203,20 +203,31 @@ serve(async (req) => {
     if (aiRequested) {
       logEvent('ai_attempt', { req_id });
       
-      try {
-        await ensureSafeInput(trimmedText);
-        aiResult = await runAIAnalysis(trimmedText);
-        aiRan = true;
-        aiFlags = aiResult.flags; // Store AI flags separately
+      // Check if the text is meaningful enough for AI analysis
+      const isPlaceholder = trimmedText.includes('Please copy and paste your contract text below') || 
+                           trimmedText.includes('extraction is not yet implemented') ||
+                           trimmedText.includes('extraction failed') ||
+                           trimmedText.length < 100;
+      
+      if (isPlaceholder) {
+        console.log('AI analysis skipped - text appears to be placeholder or too short');
+        logEvent('ai_skipped', { req_id, reason: 'placeholder_text' });
+        // Continue without AI analysis - use rule-based only
+      } else {
+        try {
+          await ensureSafeInput(trimmedText);
+          aiResult = await runAIAnalysis(trimmedText);
+          aiRan = true;
+          aiFlags = aiResult.flags; // Store AI flags separately
 
-        logEvent('ai_success', {
-          req_id,
-          ai_provider: aiResult?.meta?.provider || null,
-          ai_model: aiResult?.meta?.model || null,
-          ai_tokens_in: aiResult?.meta?.tokens_in || null,
-          ai_tokens_out: aiResult?.meta?.tokens_out || null,
-          ai_latency_ms: aiResult?.meta?.latency_ms || null
-        });
+          logEvent('ai_success', {
+            req_id,
+            ai_provider: aiResult?.meta?.provider || null,
+            ai_model: aiResult?.meta?.model || null,
+            ai_tokens_in: aiResult?.meta?.tokens_in || null,
+            ai_tokens_out: aiResult?.meta?.tokens_out || null,
+            ai_latency_ms: aiResult?.meta?.latency_ms || null
+          });
 
         // Merge results
         // a) Flags de-dup (prefer AI severity on conflicts)
