@@ -4,11 +4,11 @@ import { Card } from "@/components/ui/card";
 import Navigation from "@/components/Navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { CheckCircle, Shield, Zap, Clock } from "lucide-react";
-
 const Index = () => {
-  const { user } = useAuth();
-  return (
-    <div className="min-h-screen bg-background">
+  const {
+    user
+  } = useAuth();
+  return <div className="min-h-screen bg-background">
       <Navigation />
       
       {/* Hero Section */}
@@ -17,9 +17,7 @@ const Index = () => {
           <h1 className="text-5xl md:text-7xl font-semibold tracking-tight leading-tight mb-6 bg-gradient-to-r from-[#3B82F6] via-[#6366F1] to-[#4338CA] bg-clip-text text-transparent">
             ClauseWise AI contract review for freelancers
           </h1>
-          <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
-            Upload a contract and get a simple traffic-light risk report with safer wording.
-          </p>
+          <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">Upload a contract and get a risk report so you are informed before signing</p>
           
           <Link to={user ? "/app" : "/sign-up"}>
             <Button size="lg" className="text-lg px-12 py-4 mb-16">
@@ -82,8 +80,6 @@ const Index = () => {
           </div>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 };
-
 export default Index;
