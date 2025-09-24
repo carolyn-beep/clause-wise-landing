@@ -43,9 +43,16 @@ const SignIn = () => {
         navigate('/app');
       }
     } catch (err) {
+      console.error("Unexpected sign in error:", err);
+      const isNetworkError = err instanceof TypeError || 
+                           (err as any)?.message?.toLowerCase().includes('network') ||
+                           (err as any)?.message?.toLowerCase().includes('fetch');
+      
       toast({
-        title: "Sign in failed",
-        description: "An unexpected error occurred",
+        title: "Network Connection Issue",
+        description: isNetworkError 
+          ? "Unable to connect to authentication server. Please ask your IT administrator to whitelist: https://fecwtquqfbgpawkmxzvz.supabase.co" 
+          : "An unexpected error occurred",
         variant: "destructive",
       });
     } finally {
