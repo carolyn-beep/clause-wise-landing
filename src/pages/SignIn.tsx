@@ -65,7 +65,7 @@ const SignIn = () => {
       const { error } = await supabase.auth.signInWithOtp({
         email: magicEmail,
         options: {
-          emailRedirectTo: `${window.location.origin}/auth/callback`
+          emailRedirectTo: 'https://clausewise-ai.com/auth/callback'
         }
       });
 
