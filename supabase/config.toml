@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.api-demo-analyze]
 verify_jwt = false
+
+[functions.upload-extract]
+verify_jwt = true
+
+[functions.analyze-contract]
+verify_jwt = true
