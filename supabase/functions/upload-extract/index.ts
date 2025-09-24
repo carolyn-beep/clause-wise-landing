@@ -156,31 +156,64 @@ serve(async (req) => {
       }
     } else if (file.type === 'application/pdf' || fileExtension === '.pdf') {
       try {
-        // Extract text from PDF using pdf-parse library
+        // Extract text from PDF using a Deno-compatible approach
         const arrayBuffer = await file.arrayBuffer();
+        const uint8Array = new Uint8Array(arrayBuffer);
         
-        // Import pdf-parse dynamically (it's a CommonJS module)
-        const pdfParse = await import('https://esm.sh/pdf-parse@1.1.1');
-        const pdf = await pdfParse.default(arrayBuffer);
+        // Try to extract text using basic PDF parsing
+        // Convert bytes to text and look for readable content
+        let pdfText = '';
         
-        extractedText = pdf.text;
+        try {
+          // Simple text extraction by looking for text between BT/ET operators
+          const decoder = new TextDecoder('utf-8', { fatal: false });
+          const fullText = decoder.decode(uint8Array);
+          
+          // Look for text streams in PDF
+          const textMatches = fullText.match(/\((.*?)\)/g) || [];
+          const streamMatches = fullText.match(/BT\s*(.*?)\s*ET/gs) || [];
+          
+          // Extract text from parentheses (common PDF text encoding)
+          for (const match of textMatches) {
+            const text = match.slice(1, -1); // Remove parentheses
+            if (text.length > 2 && /[a-zA-Z]/.test(text)) {
+              pdfText += text + ' ';
+            }
+          }
+          
+          // Also try to extract from text streams
+          for (const stream of streamMatches) {
+            const streamText = stream.replace(/BT|ET|Tf|Td|Tj|TJ|\d+(\.\d+)?\s+/g, ' ')
+                                   .replace(/[()]/g, '')
+                                   .replace(/\s+/g, ' ')
+                                   .trim();
+            if (streamText.length > 10) {
+              pdfText += streamText + ' ';
+            }
+          }
+          
+          pdfText = pdfText.trim();
+          
+        } catch (parseError) {
+          console.log('Basic PDF text extraction failed:', parseError.message);
+        }
         
-        // Check if text extraction was successful
-        if (!extractedText || extractedText.trim().length < 50) {
+        if (pdfText && pdfText.length > 50) {
+          extractedText = pdfText;
+          console.log(`Successfully extracted ${extractedText.length} characters from PDF using basic parsing`);
+        } else {
           // Fallback: check if it's likely an image-only PDF
-          const pdfBytes = new Uint8Array(arrayBuffer);
-          const pdfString = new TextDecoder().decode(pdfBytes.slice(0, 1000));
+          const decoder = new TextDecoder();
+          const pdfString = decoder.decode(uint8Array.slice(0, 2000));
           const textObjectCount = (pdfString.match(/BT|Tj|TJ/g) || []).length;
           
           if (textObjectCount === 0) {
-            extractedText = `Please copy and paste your contract text below. This looks like a scanned/image PDF. OCR isn't enabled yet.`;
-            notes.push("This looks like a scanned/image PDF. OCR isn't enabled yet.");
+            extractedText = `Please copy and paste your contract text below. This looks like a scanned/image PDF that requires OCR (not yet available).`;
+            notes.push("This appears to be a scanned/image PDF. OCR capability is not yet implemented.");
           } else {
-            extractedText = `Please copy and paste your contract text below. PDF text extraction found very little readable text.`;
-            notes.push("PDF text extraction found very little readable text");
+            extractedText = `Please copy and paste your contract text below. The PDF contains text but our basic extraction couldn't parse it properly.`;
+            notes.push("PDF contains text but extraction was unsuccessful - please copy/paste manually");
           }
-        } else {
-          console.log(`Successfully extracted ${extractedText.length} characters from PDF`);
         }
         
       } catch (error) {

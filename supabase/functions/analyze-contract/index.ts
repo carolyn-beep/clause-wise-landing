@@ -207,7 +207,7 @@ serve(async (req) => {
       const isPlaceholder = trimmedText.includes('Please copy and paste your contract text below') || 
                            trimmedText.includes('extraction is not yet implemented') ||
                            trimmedText.includes('extraction failed') ||
-                           trimmedText.length < 100;
+                           trimmedText.length < 50; // Reduced from 100 to 50
       
       if (isPlaceholder) {
         console.log('AI analysis skipped - text appears to be placeholder or too short');
