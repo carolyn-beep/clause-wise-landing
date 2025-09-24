@@ -237,36 +237,51 @@ export async function analyzeWithOpenAI({ text }: { text: string }): Promise<Con
   const system = SYSTEM_PROMPT;
   const user = buildUserPrompt(inputText, truncated);
 
-  // First attempt
-  let first;
-  try {
-    first = await callOpenAIJSON({ apiKey, model, system, user });
-  } catch (e) {
-    // Hard failure before JSON — bubble up
-    throw e;
-  }
-
-  if (!looksLikeSchema(first.parsed)) {
-    // Retry once instructing JSON-only reprint
-    const retryUser =
-      user +
-      `
-
-If your previous message contained anything other than JSON or did not match the schema, REPRINT JSON-ONLY that strictly conforms to the schema.`;
-    const second = await callOpenAIJSON({ apiKey, model, system, user: retryUser });
-    if (!looksLikeSchema(second.parsed)) {
-      const err: any = new Error('Model output does not match schema after retry');
-      err.code = 'AI_BAD_OUTPUT';
-      err.raw = second.meta?.raw ?? first.meta?.raw;
-      throw err;
+  // Helper to run a full attempt (with JSON retry) for a given model
+  const runAttempt = async (mdl: string): Promise<ContractAnalysisResult> => {
+    let first: any;
+    try {
+      first = await callOpenAIJSON({ apiKey, model: mdl, system, user });
+    } catch (e: any) {
+      // Bubble up to caller to decide fallback
+      throw e;
     }
-    const result: ContractAnalysisResult = { ...second.parsed, meta: second.meta };
-    // Add a note to summary if truncated
-    if (truncated) result.summary = result.summary.trim() + ' (Note: analysis ran on a truncated excerpt.)';
-    return result;
-  }
 
-  const result: ContractAnalysisResult = { ...first.parsed, meta: first.meta };
-  if (truncated) result.summary = result.summary.trim() + ' (Note: analysis ran on a truncated excerpt.)';
-  return result;
+    if (!looksLikeSchema(first.parsed)) {
+      const retryUser =
+        user +
+        `\n\nIf your previous message contained anything other than JSON or did not match the schema, REPRINT JSON-ONLY that strictly conforms to the schema.`;
+      const second = await callOpenAIJSON({ apiKey, model: mdl, system, user: retryUser });
+      if (!looksLikeSchema(second.parsed)) {
+        const err: any = new Error('Model output does not match schema after retry');
+        err.code = 'AI_BAD_OUTPUT';
+        err.raw = second.meta?.raw ?? first.meta?.raw;
+        throw err;
+      }
+      const res: ContractAnalysisResult = { ...second.parsed, meta: second.meta };
+      if (truncated) res.summary = res.summary.trim() + ' (Note: analysis ran on a truncated excerpt.)';
+      return res;
+    }
+
+    const res: ContractAnalysisResult = { ...first.parsed, meta: first.meta };
+    if (truncated) res.summary = res.summary.trim() + ' (Note: analysis ran on a truncated excerpt.)';
+    return res;
+  };
+
+  // Primary attempt with configured model; on error, try fallbacks automatically
+  try {
+    return await runAttempt(model);
+  } catch (primaryErr: any) {
+    console.warn(`Primary model '${model}' failed: ${primaryErr?.message || primaryErr}. Trying fallbacks...`);
+    const fallbacks = ['gpt-4o-mini', 'gpt-4.1-2025-04-14'];
+    for (const fb of fallbacks) {
+      try {
+        return await runAttempt(fb);
+      } catch (e) {
+        console.warn(`Fallback model '${fb}' failed: ${(e as any)?.message || e}`);
+      }
+    }
+    // If all fail, rethrow original
+    throw primaryErr;
+  }
 }
