@@ -213,6 +213,7 @@ serve(async (req) => {
         console.log('AI analysis skipped - text appears to be placeholder or too short');
         logEvent('ai_skipped', { req_id, reason: 'placeholder_text' });
         // Continue without AI analysis - use rule-based only
+        result = { ...ruleBased, ruleFlags, aiFlags: [] };
       } else {
         try {
           await ensureSafeInput(trimmedText);
@@ -229,68 +230,69 @@ serve(async (req) => {
             ai_latency_ms: aiResult?.meta?.latency_ms || null
           });
 
-        // Merge results
-        // a) Flags de-dup (prefer AI severity on conflicts)
-        function norm(s: string): string { 
-          return s.toLowerCase().replace(/\s+/g, ' ').slice(0, 140); 
-        }
-        
-        const pickSeverity = (a: string, b: string): 'low' | 'medium' | 'high' => {
-          const rank = { low: 0, medium: 1, high: 2 };
-          // prefer AI on tie or conflict
-          return rank[b as keyof typeof rank] >= rank[a as keyof typeof rank] ? b as 'low' | 'medium' | 'high' : a as 'low' | 'medium' | 'high';
-        };
+          // Merge results
+          // a) Flags de-dup (prefer AI severity on conflicts)
+          function norm(s: string): string { 
+            return s.toLowerCase().replace(/\s+/g, ' ').slice(0, 140); 
+          }
+          
+          const pickSeverity = (a: string, b: string): 'low' | 'medium' | 'high' => {
+            const rank = { low: 0, medium: 1, high: 2 };
+            // prefer AI on tie or conflict
+            return rank[b as keyof typeof rank] >= rank[a as keyof typeof rank] ? b as 'low' | 'medium' | 'high' : a as 'low' | 'medium' | 'high';
+          };
 
-        const byKey = new Map(); // key = normalized snippet
-        for (const f of ruleBased.flags) {
-          byKey.set(norm(f.clause), { ...f });
-        }
-        for (const f of aiResult.flags) {
-          const k = norm(f.clause);
-          if (!byKey.has(k)) {
-            byKey.set(k, { ...f });
-          } else {
-            const prev = byKey.get(k);
-            byKey.set(k, {
-              clause: prev.clause.length >= f.clause.length ? prev.clause : f.clause,
-              severity: pickSeverity(prev.severity, f.severity),
-              rationale: f.rationale || prev.rationale,
-              suggestion: f.suggestion || prev.suggestion
+          const byKey = new Map(); // key = normalized snippet
+          for (const f of ruleBased.flags) {
+            byKey.set(norm(f.clause), { ...f });
+          }
+          for (const f of aiResult.flags) {
+            const k = norm(f.clause);
+            if (!byKey.has(k)) {
+              byKey.set(k, { ...f });
+            } else {
+              const prev = byKey.get(k);
+              byKey.set(k, {
+                clause: prev.clause.length >= f.clause.length ? prev.clause : f.clause,
+                severity: pickSeverity(prev.severity, f.severity),
+                rationale: f.rationale || prev.rationale,
+                suggestion: f.suggestion || prev.suggestion
+              });
+            }
+          }
+          const mergedFlags = Array.from(byKey.values());
+
+          // b) Overall risk = max(ruleBased, ai)
+          const rank = { low: 0, medium: 1, high: 2 };
+          const overall_risk = (rank[aiResult.overall_risk as keyof typeof rank] > rank[ruleBased.overall_risk as keyof typeof rank])
+            ? aiResult.overall_risk
+            : ruleBased.overall_risk;
+
+          // c) Summary prefer AI
+          const summary = aiResult.summary || ruleBased.summary;
+
+          result = { overall_risk, summary, flags: mergedFlags, ai: aiResult, ruleFlags, aiFlags };
+        } catch (err: any) {
+          logEvent('ai_failure', { req_id, error_code: err?.code || 'AI_ERROR' });
+          
+          if (err?.code === 'CONTENT_BLOCKED') {
+            return new Response(JSON.stringify({
+              error: 'Content blocked',
+              message: formatModerationMessage(err.categories || [])
+            }), { 
+              status: 400, 
+              headers: { 
+                ...corsHeaders, 
+                'Content-Type': 'application/json',
+                'x-req-id': req_id 
+              }
             });
           }
+          console.error('AI analysis failed', err);
+          aiFallbackUsed = true;
+          // Fallback to rule-based results
+          result = { ...ruleBased, ruleFlags, aiFlags: [] };
         }
-        const mergedFlags = Array.from(byKey.values());
-
-        // b) Overall risk = max(ruleBased, ai)
-        const rank = { low: 0, medium: 1, high: 2 };
-        const overall_risk = (rank[aiResult.overall_risk as keyof typeof rank] > rank[ruleBased.overall_risk as keyof typeof rank])
-          ? aiResult.overall_risk
-          : ruleBased.overall_risk;
-
-        // c) Summary prefer AI
-        const summary = aiResult.summary || ruleBased.summary;
-
-        result = { overall_risk, summary, flags: mergedFlags, ai: aiResult, ruleFlags, aiFlags };
-      } catch (err: any) {
-        logEvent('ai_failure', { req_id, error_code: err?.code || 'AI_ERROR' });
-        
-        if (err?.code === 'CONTENT_BLOCKED') {
-          return new Response(JSON.stringify({
-            error: 'Content blocked',
-            message: formatModerationMessage(err.categories || [])
-          }), { 
-            status: 400, 
-            headers: { 
-              ...corsHeaders, 
-              'Content-Type': 'application/json',
-              'x-req-id': req_id 
-            }
-          });
-        }
-        console.error('AI analysis failed', err);
-        aiFallbackUsed = true;
-        // Fallback to rule-based results
-        result = { ...ruleBased, ruleFlags, aiFlags: [] };
       }
     } else {
       // AI was not requested; keep defaults (false/false)
