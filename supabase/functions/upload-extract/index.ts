@@ -252,7 +252,6 @@ serve(async (req) => {
             notes.push("PDF contains text but extraction was unsuccessful - please copy/paste manually");
           }
         }
-        }
         
       } catch (error) {
         console.error('PDF processing error:', error);
