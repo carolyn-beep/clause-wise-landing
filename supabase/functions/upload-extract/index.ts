@@ -156,51 +156,88 @@ serve(async (req) => {
       }
     } else if (file.type === 'application/pdf' || fileExtension === '.pdf') {
       try {
-        // Extract text from PDF using a Deno-compatible approach
+        // Extract text from PDF using a Deno-compatible approach (no Node APIs)
         const arrayBuffer = await file.arrayBuffer();
         const uint8Array = new Uint8Array(arrayBuffer);
         
-        // Try to extract text using basic PDF parsing
-        // Convert bytes to text and look for readable content
+        // Heuristic text extraction from PDF source
         let pdfText = '';
         
         try {
-          // Simple text extraction by looking for text between BT/ET operators
-          const decoder = new TextDecoder('utf-8', { fatal: false });
-          const fullText = decoder.decode(uint8Array);
-          
-          // Look for text streams in PDF
-          const textMatches = fullText.match(/\((.*?)\)/g) || [];
-          const streamMatches = fullText.match(/BT\s*(.*?)\s*ET/gs) || [];
-          
-          // Extract text from parentheses (common PDF text encoding)
-          for (const match of textMatches) {
-            const text = match.slice(1, -1); // Remove parentheses
-            if (text.length > 2 && /[a-zA-Z]/.test(text)) {
-              pdfText += text + ' ';
+          // Decode bytes to a string we can regex over
+          const full = new TextDecoder('utf-8', { fatal: false }).decode(uint8Array);
+
+          // 1) Extract text objects between BT/ET blocks (layout operators removed)
+          const btEtBlocks = full.match(/BT\s*[\s\S]*?\s*ET/g) || [];
+          for (const block of btEtBlocks) {
+            // Pull out strings inside parentheses within this text block
+            const parenMatches = block.match(/\((?:\\.|[^\\()])+\)/g) || [];
+            for (const m of parenMatches) {
+              let t = m.slice(1, -1);
+              // Unescape common PDF escapes
+              t = t
+                .replace(/\\\(/g, '(')
+                .replace(/\\\)/g, ')')
+                .replace(/\\n/g, '\n')
+                .replace(/\\r/g, '\r')
+                .replace(/\\t/g, '\t')
+                .replace(/\\\\/g, '\\');
+              if (/[A-Za-z0-9]/.test(t)) pdfText += t + ' ';
+            }
+
+            // Extract hex strings like <48656C6C6F>
+            const hexMatches = block.match(/<([0-9A-Fa-f\s]+)>/g) || [];
+            for (const hm of hexMatches) {
+              const hex = hm.replace(/[<>\s]/g, '');
+              if (hex.length >= 4 && hex.length % 2 === 0) {
+                let ascii = '';
+                for (let i = 0; i < hex.length; i += 2) {
+                  const code = parseInt(hex.slice(i, i + 2), 16);
+                  // Keep printable ASCII; replace others with space
+                  ascii += (code >= 32 && code <= 126) ? String.fromCharCode(code) : ' ';
+                }
+                if (/[A-Za-z0-9]/.test(ascii)) pdfText += ascii + ' ';
+              }
             }
           }
-          
-          // Also try to extract from text streams
-          for (const stream of streamMatches) {
-            const streamText = stream.replace(/BT|ET|Tf|Td|Tj|TJ|\d+(\.\d+)?\s+/g, ' ')
-                                   .replace(/[()]/g, '')
-                                   .replace(/\s+/g, ' ')
-                                   .trim();
-            if (streamText.length > 10) {
-              pdfText += streamText + ' ';
+
+          // 2) Also parse TJ arrays like [(Hello) <0020> (World)] TJ
+          const tjArrays = full.match(/\[((?:\\.|[^\]])+)]\s*TJ/g) || [];
+          for (const arr of tjArrays) {
+            // Pull both () and <> items
+            const parts = arr.match(/\((?:\\.|[^\\()])+\)|<([0-9A-Fa-f\s]+)>/g) || [];
+            for (const p of parts) {
+              if (p.startsWith('(')) {
+                let t = p.slice(1, -1)
+                  .replace(/\\\(/g, '(')
+                  .replace(/\\\)/g, ')')
+                  .replace(/\\n/g, '\n')
+                  .replace(/\\r/g, '\r')
+                  .replace(/\\t/g, '\t')
+                  .replace(/\\\\/g, '\\');
+                if (/[A-Za-z0-9]/.test(t)) pdfText += t + ' ';
+              } else {
+                const hex = p.replace(/[<>\s]/g, '');
+                if (hex.length >= 4 && hex.length % 2 === 0) {
+                  let ascii = '';
+                  for (let i = 0; i < hex.length; i += 2) {
+                    const code = parseInt(hex.slice(i, i + 2), 16);
+                    ascii += (code >= 32 && code <= 126) ? String.fromCharCode(code) : ' ';
+                  }
+                  if (/[A-Za-z0-9]/.test(ascii)) pdfText += ascii + ' ';
+                }
+              }
             }
           }
-          
-          pdfText = pdfText.trim();
-          
+
+          pdfText = pdfText.replace(/\s+/g, ' ').trim();
         } catch (parseError) {
-          console.log('Basic PDF text extraction failed:', parseError.message);
+          console.log('Basic PDF text extraction failed:', (parseError as any)?.message || parseError);
         }
         
         if (pdfText && pdfText.length > 50) {
           extractedText = pdfText;
-          console.log(`Successfully extracted ${extractedText.length} characters from PDF using basic parsing`);
+          console.log(`Successfully extracted ${extractedText.length} characters from PDF using heuristic parsing`);
         } else {
           // Fallback: check if it's likely an image-only PDF
           const decoder = new TextDecoder();
@@ -215,11 +252,12 @@ serve(async (req) => {
             notes.push("PDF contains text but extraction was unsuccessful - please copy/paste manually");
           }
         }
+        }
         
       } catch (error) {
         console.error('PDF processing error:', error);
         // Fallback to manual input
-        extractedText = `Please copy and paste your contract text below. PDF text extraction failed: ${error.message}`;
+        extractedText = `Please copy and paste your contract text below. PDF text extraction failed.`;
         notes.push("PDF text extraction failed - please copy and paste the text manually");
       }
     } else if (file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || fileExtension === '.docx') {
